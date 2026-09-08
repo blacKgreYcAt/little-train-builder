@@ -1,69 +1,64 @@
-import Image from "next/image";
+import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
+    <div className="workshop-bg flex min-h-svh flex-1 flex-col">
+      <header className="safe-top safe-x flex items-center justify-between border-b border-[#2c3d35] px-5 py-3">
+        <div>
+          <div className="ws-title text-2xl">
+            小火車<span className="text-[#e63b2e]">工坊</span>
+          </div>
+          <div className="ws-label">Steam Workshop</div>
+        </div>
+        <span className="ws-label hidden sm:inline">Unofficial Fan Project</span>
+      </header>
+
+      <main className="safe-x flex flex-1 flex-col justify-center gap-8 px-6 py-10 sm:px-12">
+        <div>
+          <div className="ws-label mb-3">Build it. Then drive it.</div>
+          <h1 className="ws-title text-5xl sm:text-7xl">
+            組一台
+            <br />
+            <span className="text-[#e63b2e]">你的小火車</span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-4 max-w-md text-[#8fa39a]">
+            車身、表情、煙囪、車輪、後車廂 —— 零件拖上去就裝好。
+            組完開上 8 字形路線,穿過隧道、從橋上跨過自己。
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Link
+            href="/garage"
+            className="ws-btn-red rounded-md px-10 py-5 text-center text-2xl active:scale-[0.98]"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            🔧 進車庫組裝
+          </Link>
+          <Link
+            href="/track"
+            className="ws-btn rounded-md px-10 py-5 text-center text-2xl font-bold active:scale-[0.98]"
           >
-            Documentation
-          </a>
+            🛤️ 直接開火車
+          </Link>
         </div>
+
+        <dl className="grid max-w-lg grid-cols-3 gap-3">
+          {[
+            { k: "零件分類", v: "8" },
+            { k: "捏臉參數", v: "15" },
+            { k: "鏡頭視角", v: "3" },
+          ].map((s) => (
+            <div key={s.k} className="ws-panel rounded-md px-3 py-3">
+              <div className="text-2xl font-black tabular-nums text-[#3b8bff]">{s.v}</div>
+              <div className="ws-label mt-1">{s.k}</div>
+            </div>
+          ))}
+        </dl>
       </main>
+
+      <footer className="safe-x safe-bottom ws-label border-t border-[#2c3d35] px-5 py-3">
+        跟著跑 / 駕駛座 / 從天上看
+      </footer>
     </div>
   );
 }
