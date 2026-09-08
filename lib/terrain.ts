@@ -87,9 +87,15 @@ function pointOnRoute(frac: number, sideways = 0) {
  * embankment through low ground, so the crown has a long way to reach. What
  * works is a ridge that follows the line for the whole length of the bore with
  * its crown held a fixed height above the tube.
+ *
+ * The bore is fixed in units of track rather than as a fraction of the lap: as
+ * a fraction it silently grows whenever the route is redrawn longer, outruns
+ * the ridge, and the see-through comes straight back.
  */
-export const TUNNEL_FROM = 0.2549;
-export const TUNNEL_TO = 0.3751;
+const TUNNEL_MID_FRAC = 0.315;
+const TUNNEL_HALF = 25.5;
+export const TUNNEL_FROM = TUNNEL_MID_FRAC - TUNNEL_HALF / ROUTE_LENGTH;
+export const TUNNEL_TO = TUNNEL_MID_FRAC + TUNNEL_HALF / ROUTE_LENGTH;
 
 /** Bore geometry, shared with the mesh in Track3D so the two can't drift. */
 export const BORE_LIFT = 1.7;
@@ -150,10 +156,11 @@ function tunnelCoords(x: number, z: number) {
 
 /** 0 outside the ridge, 1 where the crown has to sit right over the bore. */
 function tunnelWeight(along: number, side: number) {
-  // flat-topped along the line, so cover can't sag somewhere in the middle of
-  // the bore, then falling away over the last quarter to meet the ground at
-  // the mouths — which is where the portal masonry stands
-  const ends = fade(Math.max(0, Math.min(1, (1 - along) / 0.12)));
+  // Flat-topped along the line so cover can't sag anywhere inside the bore,
+  // then dropping away sharply over the last stretch. The flat part has to
+  // reach past the portals (TUNNEL_HILL.r), or the ground runs out just short
+  // of the mouth and leaves a gap you can see through.
+  const ends = fade(Math.max(0, Math.min(1, (1 - along) / 0.06)));
   const flanks = fade(Math.max(0, 1 - side));
   return ends * flanks;
 }

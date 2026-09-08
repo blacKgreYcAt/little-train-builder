@@ -1095,9 +1095,11 @@ function Driver({
       camera.lookAt(smoothLook.current);
       return;
     } else {
-      desired.set(0, 126, 74);
+      // the loop is no longer centred on the origin — the east lobe reaches
+      // out to x=117 — so the bird's eye view sits over the middle of it
+      desired.set(20, 152, 96);
       camera.position.lerp(desired, 1 - Math.pow(0.02, dt));
-      lookTarget.set(0, 0, 0);
+      lookTarget.set(20, 0, 0);
     }
     smoothLook.current.lerp(lookTarget, 1 - Math.pow(0.0009, dt));
     camera.lookAt(smoothLook.current);

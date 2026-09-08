@@ -10,18 +10,28 @@ import * as THREE from "three";
  * map, 5.2 units apart vertically, which is the bridge.
  */
 const CONTROL_POINTS: [number, number, number][] = [
+  // --- east lobe: the long one. Big sweeping curves and a summit that isn't
+  //     at the top of the climb, so there's a dip to run down into and a short
+  //     sharp pull back out of it.
   [0, 0.0, 0], // A — low crossing
-  [29, 0.15, 24],
-  [61, 0.8, 32],
-  [80, 2.0, 5],
-  [64, 3.4, -24],
-  [29, 4.6, -21],
+  [30, 0.25, 27],
+  [66, 1.2, 41],
+  [100, 2.4, 33],
+  [117, 1.1, 6], // far east — the dip
+  [104, 2.9, -23],
+  [72, 3.8, -41],
+  [34, 4.7, -29],
+  [10, 5.15, -12],
   [0, 5.4, 0], // B — high crossing, on the bridge
-  [-29, 4.6, 21],
-  [-64, 3.4, 24],
-  [-80, 2.0, -5],
-  [-61, 0.8, -32],
-  [-29, 0.15, -24],
+  // --- west lobe: shorter and tighter, so the second half of the lap is a
+  //     different ride from the first rather than its mirror image.
+  [-22, 5.0, 18],
+  [-52, 4.2, 30],
+  [-74, 3.3, 17],
+  [-76, 2.4, -7],
+  [-57, 1.5, -25],
+  [-31, 0.7, -30],
+  [-12, 0.25, -18],
 ];
 
 export const routeCurve = new THREE.CatmullRomCurve3(
