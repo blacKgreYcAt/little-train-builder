@@ -43,3 +43,5 @@ next-env.d.ts
 # full-size source artwork (kept out of git, the optimised copy ships in public/)
 art/
 
+
+.vercel

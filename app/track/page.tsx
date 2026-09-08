@@ -23,10 +23,9 @@ export default function TrackPage() {
 
   const controlsRef = useRef<Controls>({ ...INITIAL_CONTROLS });
   const speedRef = useRef(0);
-  const held = useRef<{ forward: boolean; backward: boolean }>({
-    forward: false,
-    backward: false,
-  });
+  /** What the child is holding down right now. */
+  const held = useRef({ throttle: false, brake: false });
+  const [reverser, setReverser] = useState<1 | -1>(1);
 
   useEffect(() => {
     setConfig(loadConfig());
@@ -45,34 +44,25 @@ export default function TrackPage() {
       last = now;
       const c = controlsRef.current;
       const h = held.current;
-      if (h.forward || h.backward) {
-        const want = h.forward ? 1 : -1;
-        // never slam it into reverse while still rolling the other way
-        if (c.reverser !== want && Math.abs(speedRef.current) < 0.6) {
-          c.reverser = want;
-        }
-        if (c.reverser === want) {
-          c.regulator = Math.min(1, c.regulator + REGULATOR_RATE * dt);
-          c.brake = 0;
-        } else {
-          c.regulator = 0;
-          c.brake = 1;
-        }
-      } else if (cameraMode !== "cab") {
-        // in the simple views, letting go shuts off and applies the brake
-        c.regulator = Math.max(0, c.regulator - REGULATOR_RATE * dt);
-        c.brake = 0.55;
+      if (cameraMode !== "cab") {
+        // Throttle opens the regulator; let go and it closes again. The brake is
+        // its own pedal rather than "the other arrow", which is what a child
+        // actually reaches for.
+        c.reverser = reverser;
+        c.regulator = h.throttle
+          ? Math.min(1, c.regulator + REGULATOR_RATE * dt)
+          : Math.max(0, c.regulator - REGULATOR_RATE * dt * 1.6);
+        c.brake = h.brake ? 1 : 0;
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [cameraMode]);
+  }, [cameraMode, reverser]);
 
-  const press = useCallback((dir: "forward" | "backward", down: boolean) => {
+  const press = useCallback((which: "throttle" | "brake", down: boolean) => {
     primeAudio();
-    held.current[dir] = down;
-    if (down) controlsRef.current.brake = 0;
+    held.current[which] = down;
   }, []);
 
   const honk = useCallback(() => {
@@ -83,16 +73,16 @@ export default function TrackPage() {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.repeat) return;
-      if (e.code === "ArrowRight" || e.code === "ArrowUp") press("forward", true);
-      if (e.code === "ArrowLeft" || e.code === "ArrowDown") press("backward", true);
+      if (e.code === "ArrowRight" || e.code === "ArrowUp") press("throttle", true);
+      if (e.code === "ArrowLeft" || e.code === "ArrowDown") press("brake", true);
       if (e.code === "Space") {
         e.preventDefault();
         honk();
       }
     }
     function onKeyUp(e: KeyboardEvent) {
-      if (e.code === "ArrowRight" || e.code === "ArrowUp") press("forward", false);
-      if (e.code === "ArrowLeft" || e.code === "ArrowDown") press("backward", false);
+      if (e.code === "ArrowRight" || e.code === "ArrowUp") press("throttle", false);
+      if (e.code === "ArrowLeft" || e.code === "ArrowDown") press("brake", false);
     }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -102,18 +92,18 @@ export default function TrackPage() {
     };
   }, [press, honk]);
 
-  const holdProps = (dir: "forward" | "backward") => ({
+  const holdProps = (which: "throttle" | "brake") => ({
     onPointerDown: (e: React.PointerEvent) => {
-      press(dir, true);
+      press(which, true);
       try {
         e.currentTarget.setPointerCapture(e.pointerId);
       } catch {
         // no active pointer to capture — the hold still works
       }
     },
-    onPointerUp: () => press(dir, false),
-    onPointerCancel: () => press(dir, false),
-    onPointerLeave: () => press(dir, false),
+    onPointerUp: () => press(which, false),
+    onPointerCancel: () => press(which, false),
+    onPointerLeave: () => press(which, false),
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
 
@@ -168,27 +158,43 @@ export default function TrackPage() {
         <div className="safe-bottom safe-x pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-4">
           <button
             type="button"
-            {...holdProps("backward")}
-            aria-label="後退"
-            className="ws-btn pointer-events-auto rounded-md px-9 py-6 text-4xl active:scale-90"
+            {...holdProps("brake")}
+            aria-label="煞車"
+            className="pointer-events-auto rounded-2xl bg-[#c0392b] px-10 py-7 text-5xl text-white shadow-[0_6px_0_#7a1f16] active:translate-y-1 active:shadow-[0_2px_0_#7a1f16]"
           >
-            ⬅️
+            🛑
           </button>
+
+          <div className="pointer-events-auto flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                primeAudio();
+                // only swap direction once she's actually stopped
+                if (Math.abs(speedRef.current) < 0.6) setReverser((r) => (r === 1 ? -1 : 1));
+              }}
+              aria-label={reverser === 1 ? "目前前進,點一下改後退" : "目前後退,點一下改前進"}
+              className="ws-btn rounded-full px-5 py-3 text-2xl active:scale-90"
+            >
+              {reverser === 1 ? "⬆️" : "⬇️"}
+            </button>
+            <button
+              type="button"
+              onClick={honk}
+              aria-label="鳴笛"
+              className="ws-btn-red rounded-full px-7 py-5 text-4xl active:scale-90"
+            >
+              📯
+            </button>
+          </div>
+
           <button
             type="button"
-            onClick={honk}
-            aria-label="鳴笛"
-            className="ws-btn-red pointer-events-auto mb-1 rounded-full px-7 py-6 text-4xl active:scale-90"
+            {...holdProps("throttle")}
+            aria-label="油門"
+            className="pointer-events-auto rounded-2xl bg-[#2f9e44] px-10 py-7 text-5xl text-white shadow-[0_6px_0_#1c6129] active:translate-y-1 active:shadow-[0_2px_0_#1c6129]"
           >
-            📯
-          </button>
-          <button
-            type="button"
-            {...holdProps("forward")}
-            aria-label="前進"
-            className="ws-btn-red pointer-events-auto rounded-md px-9 py-6 text-4xl active:scale-90"
-          >
-            ➡️
+            ▶️
           </button>
         </div>
       )}

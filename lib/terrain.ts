@@ -77,15 +77,21 @@ function pointOnRoute(frac: number, sideways = 0) {
   return { x: p.x + lat.x * sideways, y: p.y, z: p.z + lat.z * sideways };
 }
 
-/** The line runs straight through this one — see the tunnel bore in Track3D. */
-export const TUNNEL_FROM = 0.285;
-export const TUNNEL_TO = 0.345;
+/**
+ * The line runs straight through this one — see the tunnel bore in Track3D.
+ * The bore MUST be longer than the hill is wide. The terrain has no hole in it;
+ * the bore is what you actually see from inside, so any stretch of hill it
+ * doesn't reach is solid mesh the train punches through.
+ */
+export const TUNNEL_FROM = 0.2515;
+export const TUNNEL_TO = 0.3785;
 const tunnelMid = pointOnRoute((TUNNEL_FROM + TUNNEL_TO) / 2);
 export const TUNNEL_HILL: Feature = {
   x: tunnelMid.x,
   z: tunnelMid.z,
-  r: 34,
-  h: 17,
+  // kept comfortably narrower than the bore is long
+  r: 19,
+  h: 14,
 };
 
 /** A ridge sitting on the line, so the flattened corridor carves a cutting. */

@@ -84,6 +84,7 @@ function Slider({
         onChange={(e) => onChange(Number(e.target.value))}
         onPointerDown={primeAudio}
         className="kid-range min-w-0 flex-1"
+        style={{ touchAction: "none" }}
       />
       <Hint face={face} override={high} focus={focus} />
     </div>
@@ -132,13 +133,18 @@ export default function FaceEditor({
     onChange({ ...face, [key]: value });
 
   return (
-    <div className="no-touch-scroll flex h-full min-h-0 flex-col gap-2 overflow-y-auto rounded-xl bg-[#0e1512] p-2 border border-[#2c3d35]">
+    <div
+      className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto rounded-xl border border-[#2c3d35] bg-[#0e1512] p-2"
+      /* the sliders below claim touch-action: none for themselves, so this only
+         governs the gaps between them — which is what needs to scroll */
+      style={{ touchAction: "pan-y" }}
+    >
       {/* big mirror, so tiny changes are visible without hunting on the 3D model */}
-      <div className="flex items-center gap-2">
-        <svg viewBox="0 0 100 100" className="h-24 w-24 shrink-0" aria-hidden focusable="false">
+      <div className="flex shrink-0 items-start gap-2">
+        <svg viewBox="0 0 100 100" className="h-20 w-20 shrink-0" aria-hidden focusable="false">
           <FaceSvg face={face} cx={50} cy={50} r={46} rim="#D6432E" />
         </svg>
-        <div className="grid min-w-0 flex-1 grid-cols-3 gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-wrap content-start gap-1.5">
           {FACE_PRESET_ORDER.map((key) => (
             <button
               key={key}
@@ -149,7 +155,7 @@ export default function FaceEditor({
                 playClunk();
               }}
               aria-label={key}
-              className="rounded-lg border border-[#2c3d35] bg-[#1d2a24] p-0.5 transition active:scale-95"
+              className="h-14 w-14 shrink-0 rounded-lg border border-[#2c3d35] bg-[#1d2a24] p-0.5 transition active:scale-95 sm:h-16 sm:w-16"
             >
               <svg viewBox="0 0 100 100" className="h-full w-full" aria-hidden focusable="false">
                 <FaceSvg face={{ ...FACE_PRESETS[key], skin: face.skin }} cx={50} cy={50} r={44} />
@@ -191,6 +197,7 @@ export default function FaceEditor({
         ))}
       </div>
 
+      <div className="grid gap-1.5 sm:grid-cols-2 md:grid-cols-3">
       {/* eyes */}
       <Slider
         face={face}
@@ -286,6 +293,8 @@ export default function FaceEditor({
         low={{ blush: 0 }}
         high={{ blush: 1 }}
       />
+
+      </div>
 
       {/* the on/off bits */}
       <div className="flex justify-center gap-3 pb-1">

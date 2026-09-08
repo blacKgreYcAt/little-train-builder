@@ -61,6 +61,7 @@ export default function PartTray({
   onDragChange?: (state: { active: boolean; overDropZone: boolean }) => void;
 }) {
   const [category, setCategory] = useState<Category>("body");
+  const [faceOpen, setFaceOpen] = useState(false);
   const [dragging, setDragging] = useState<{ category: Category; value: string } | null>(null);
   const [overDrop, setOverDrop] = useState(false);
 
@@ -165,18 +166,25 @@ export default function PartTray({
 
   return (
     <>
-      <div className="flex h-full min-h-0 gap-2">
-        {/* which bin of parts — each icon is the part currently fitted */}
-        <div className="no-touch-scroll flex shrink-0 flex-col gap-2 overflow-y-auto pr-1">
+      {/* Two shallow rows rather than a tall side column: a phone in landscape
+          is only ~390px high, which a vertical list of eight bins can't fit. */}
+      <div className="flex h-full min-h-0 flex-col gap-2">
+        <div
+          className="flex shrink-0 gap-1.5 overflow-x-auto"
+          style={{ touchAction: "pan-x" }}
+        >
           {CATEGORY_ORDER.map((cat) => (
             <button
               key={cat}
               type="button"
-              onClick={() => setCategory(cat)}
+              onClick={() => {
+                setCategory(cat);
+                if (cat === "face") setFaceOpen(true);
+              }}
               aria-label={cat}
-              className={`shrink-0 rounded-2xl border-2 bg-[#1d2a24] p-1 transition active:scale-95 ${
+              className={`shrink-0 rounded-lg border-2 bg-[#1d2a24] p-0.5 transition active:scale-95 ${
                 category === cat
-                  ? "border-[#e63b2e] shadow-lg"
+                  ? "border-[#e63b2e]"
                   : "border-[#2c3d35] opacity-70"
               }`}
             >
@@ -185,58 +193,97 @@ export default function PartTray({
                 value={config[cat] as string}
                 body={config.body}
                 face={config.face}
-                className="h-11 w-11 sm:h-12 sm:w-12"
+                className="h-9 w-9 sm:h-11 sm:w-11"
               />
             </button>
           ))}
         </div>
 
-        {/* the face is built rather than picked, so it gets its own workshop */}
         {category === "face" ? (
+          /* The strip is only ~100px tall in landscape and the face editor is a
+             dozen sliders — so it opens over the whole screen instead. */
+          <button
+            type="button"
+            onClick={() => setFaceOpen(true)}
+            aria-label="face"
+            className="flex min-h-0 flex-1 items-center justify-center gap-3 rounded-xl border border-[#2c3d35] bg-[#0e1512] active:scale-[0.99]"
+          >
+            <PartThumb
+              category="face"
+              value=""
+              body={config.body}
+              face={config.face}
+              className="h-full w-auto py-1"
+            />
+            <span className="text-2xl">✏️</span>
+          </button>
+        ) : (
+          /* every option fits on one row, so nothing needs scrolling here and
+             touch-action: none is safe — which is what makes dragging work */
+          <div
+            className="min-h-0 flex-1 rounded-xl border border-[#2c3d35] bg-[#0e1512] p-1.5"
+            style={{ touchAction: "none" }}
+          >
+            <div className="flex h-full gap-1.5">
+              {OPTIONS[category].map((value) => {
+                const equipped = config[category] === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onPointerDown={startDrag(category, value)}
+                    onContextMenu={(e) => e.preventDefault()}
+                    aria-label={`${category} ${value}`}
+                    style={{ touchAction: "none" }}
+                    className={`relative h-full min-w-0 flex-1 rounded-lg border-2 bg-[#1d2a24] p-1 transition active:scale-95 ${
+                      equipped ? "border-[#3b8bff]" : "border-[#2c3d35]"
+                    } ${
+                      dragging?.category === category && dragging.value === value
+                        ? "opacity-30"
+                        : ""
+                    }`}
+                  >
+                    <PartThumb
+                      category={category}
+                      value={value}
+                      body={config.body}
+                      className="h-full w-full"
+                    />
+                    {equipped && (
+                      <span className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#3b8bff] text-[10px] text-white">
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* face workshop — takes the whole screen, since the strip can't hold it */}
+      {faceOpen && (
+        <div className="safe-x safe-top safe-bottom fixed inset-0 z-40 flex flex-col gap-2 bg-[#0b100e]/97 p-2">
+          <div className="flex shrink-0 items-center justify-between">
+            <span className="ws-label">Face Workshop</span>
+            <button
+              type="button"
+              onClick={() => setFaceOpen(false)}
+              aria-label="done"
+              className="ws-btn-red rounded-full px-6 py-2 text-xl active:scale-95"
+            >
+              ✓
+            </button>
+          </div>
           <div className="min-h-0 flex-1">
             <FaceEditor
               face={config.face}
               onChange={(next: FaceConfig) => onFaceChange(next)}
             />
           </div>
-        ) : (
-        <div className="no-touch-scroll min-h-0 flex-1 overflow-y-auto rounded-xl bg-[#0e1512] p-2 border border-[#2c3d35]">
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
-            {OPTIONS[category].map((value) => {
-              const equipped = config[category] === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onPointerDown={startDrag(category, value)}
-                  onContextMenu={(e) => e.preventDefault()}
-                  aria-label={`${category} ${value}`}
-                  className={`no-touch-scroll relative aspect-square rounded-lg border-2 bg-[#1d2a24] p-1 transition active:scale-95 ${
-                    equipped ? "border-[#3b8bff]" : "border-[#2c3d35]"
-                  } ${
-                    dragging?.category === category && dragging.value === value
-                      ? "opacity-30"
-                      : ""
-                  }`}
-                >
-                  <PartThumb
-                    category={category}
-                    value={value}
-                    body={config.body}
-                    className="h-full w-full"
-                  />
-                  {equipped && (
-                    <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#3b8bff] text-xs text-white">
-                      ✓
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
         </div>
-        )}
-      </div>
+      )}
 
       {/* the piece stuck to the finger */}
       {dragging && (

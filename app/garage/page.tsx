@@ -117,7 +117,7 @@ export default function GaragePage() {
           )}
         </div>
 
-        <aside className="ws-panel hidden w-[280px] shrink-0 flex-col rounded-md p-4 landscape:flex">
+        <aside className="ws-panel hidden w-[260px] shrink-0 flex-col rounded-md p-4 lg:flex">
           <div className="flex items-baseline justify-between">
             <span className="ws-label">{BODY_COLORS[config.body].label}小火車</span>
             <span className="ws-label">No. {plate}</span>
@@ -156,7 +156,7 @@ export default function GaragePage() {
       </div>
 
       {/* ---- parts strip ---- */}
-      <div className="safe-x safe-bottom h-[30svh] shrink-0 border-t border-[#2c3d35] bg-[#0b100e]/85 p-2 landscape:h-[27svh]">
+      <div className="safe-x safe-bottom h-[150px] shrink-0 border-t border-[#2c3d35] bg-[#0b100e]/85 p-2 sm:h-[172px]">
         <PartTray
           config={config}
           onChange={handleChange}
@@ -169,7 +169,7 @@ export default function GaragePage() {
       {/* portrait gets the action button as a floating pill instead of the card */}
       <Link
         href="/track"
-        className="ws-btn-red fixed bottom-[32svh] right-3 rounded-full px-5 py-3 text-lg landscape:hidden"
+        className="ws-btn-red fixed bottom-[160px] right-3 rounded-full px-4 py-2 text-base shadow-lg lg:hidden sm:bottom-[182px]"
       >
         🛤️ 出發!
       </Link>

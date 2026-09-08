@@ -23,6 +23,7 @@ import {
   LAKE_BASIN,
   LAKE_LEVEL,
   TUNNEL_FROM,
+  TUNNEL_HILL,
   TUNNEL_TO,
   buildRouteSamples,
   buildTerrainGeometry,
@@ -356,7 +357,7 @@ function Tunnel() {
   const to = TUNNEL_TO * ROUTE_LENGTH;
 
   const bore = useMemo(
-    () => new THREE.TubeGeometry(new SubRouteCurve(from, to, 1.7), 90, 2.7, 14, false),
+    () => new THREE.TubeGeometry(new SubRouteCurve(from, to, 1.7), 120, 3.1, 16, false),
     [from, to]
   );
 
@@ -365,7 +366,10 @@ function Tunnel() {
     const p = new THREE.Vector3();
     const tan = new THREE.Vector3();
     const q = new THREE.Quaternion();
-    return [from + 0.5, to - 0.5].map((d) => {
+    // at the hill's edge, where the line actually disappears into it — not at
+    // the ends of the bore, which run well beyond the hill
+    const mid = (from + to) / 2;
+    return [mid - TUNNEL_HILL.r, mid + TUNNEL_HILL.r].map((d) => {
       sampleRoute(d, p, tan);
       orientationFromTangent(tan, q);
       return { pos: p.clone(), quat: q.clone() };
