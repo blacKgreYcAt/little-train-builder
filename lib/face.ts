@@ -191,8 +191,11 @@ export function faceMetrics(f: FaceConfig) {
   const browW = lerp(0.035, 0.105, f.browThickness);
   const browTilt = f.browAngle * 0.42;
   const mouthY = 0.34;
-  const mouthW = lerp(0.22, 0.56, f.mouthWidth);
-  const mouthCurve = f.mouthCurve * 0.42;
+  const mouthW = lerp(0.26, 0.56, f.mouthWidth);
+  // The curve is scaled to the mouth's own width. As a flat amount it could
+  // arch a narrow mouth right up into the eyes — pull every slider to one end
+  // and the face stopped reading as a face at all.
+  const mouthCurve = f.mouthCurve * mouthW * 0.8;
   const mouthOpen = lerp(0, 0.3, f.mouthOpen);
   return {
     eyeR,

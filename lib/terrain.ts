@@ -79,20 +79,87 @@ function pointOnRoute(frac: number, sideways = 0) {
 
 /**
  * The line runs straight through this one — see the tunnel bore in Track3D.
- * The bore MUST be longer than the hill is wide. The terrain has no hole in it;
- * the bore is what you actually see from inside, so any stretch of hill it
- * doesn't reach is solid mesh the train punches through.
+ *
+ * There is no hole in the terrain. The bore is a BackSide tube, which is
+ * invisible from outside, so any stretch of it the ground fails to bury is a
+ * window straight through the hill. A round hill cannot do that job: it only
+ * clears the bore near its own centre, and the line here runs along an
+ * embankment through low ground, so the crown has a long way to reach. What
+ * works is a ridge that follows the line for the whole length of the bore with
+ * its crown held a fixed height above the tube.
  */
-export const TUNNEL_FROM = 0.2515;
-export const TUNNEL_TO = 0.3785;
+export const TUNNEL_FROM = 0.2549;
+export const TUNNEL_TO = 0.3751;
+
+/** Bore geometry, shared with the mesh in Track3D so the two can't drift. */
+export const BORE_LIFT = 1.7;
+export const BORE_RADIUS = 3.1;
+/** Rock between the top of the bore and open air. */
+const BORE_COVER = 2.4;
+
+/** How far the ridge runs along the line, and how far out to each side. */
+export const TUNNEL_HALF_LEN = 25;
+const TUNNEL_LAT = 22;
+
+/** The tunnel stretch of the route, each sample tagged with its distance
+ *  from the midpoint so the ridge knows where its ends are. */
+const TUNNEL_AXIS = (() => {
+  const from = TUNNEL_FROM * ROUTE_LENGTH;
+  const to = TUNNEL_TO * ROUTE_LENGTH;
+  const mid = (from + to) / 2;
+  const p = new THREE.Vector3();
+  const t = new THREE.Vector3();
+  const out: { x: number; y: number; z: number; a: number }[] = [];
+  for (let i = 0; i <= 48; i++) {
+    const d = from + ((to - from) * i) / 48;
+    sampleRoute(d, p, t);
+    out.push({ x: p.x, y: p.y, z: p.z, a: d - mid });
+  }
+  return out;
+})();
+
 const tunnelMid = pointOnRoute((TUNNEL_FROM + TUNNEL_TO) / 2);
+
+/** Kept for the portal masonry in Track3D: `r` is how far the ridge reaches
+ *  along the line, which is exactly where the mouths belong. */
 export const TUNNEL_HILL: Feature = {
   x: tunnelMid.x,
   z: tunnelMid.z,
-  // kept comfortably narrower than the bore is long
-  r: 19,
-  h: 14,
+  r: 23,
+  h: 0,
 };
+
+/** Where a point sits relative to the tunnel axis, and how high the ground
+ *  needs to be there to bury the bore. */
+function tunnelCoords(x: number, z: number) {
+  let bestD = Infinity;
+  let best = TUNNEL_AXIS[0];
+  for (const s of TUNNEL_AXIS) {
+    const d = (x - s.x) * (x - s.x) + (z - s.z) * (z - s.z);
+    if (d < bestD) {
+      bestD = d;
+      best = s;
+    }
+  }
+  return {
+    along: Math.abs(best.a) / TUNNEL_HALF_LEN,
+    side: Math.sqrt(bestD) / TUNNEL_LAT,
+    crown: best.y + BORE_LIFT + BORE_RADIUS + BORE_COVER,
+  };
+}
+
+/** 0 outside the ridge, 1 where the crown has to sit right over the bore. */
+function tunnelWeight(along: number, side: number) {
+  // flat-topped along the line, so cover can't sag somewhere in the middle of
+  // the bore, then falling away over the last quarter to meet the ground at
+  // the mouths — which is where the portal masonry stands
+  const ends = fade(Math.max(0, Math.min(1, (1 - along) / 0.12)));
+  const flanks = fade(Math.max(0, 1 - side));
+  return ends * flanks;
+}
+
+/** Cheap early-out so the axis loop only runs near the tunnel. */
+const TUNNEL_REACH = TUNNEL_HALF_LEN + TUNNEL_LAT;
 
 /** A ridge sitting on the line, so the flattened corridor carves a cutting. */
 const cuttingMid = pointOnRoute(0.62);
@@ -108,7 +175,8 @@ const lakeMid = pointOnRoute(0.83, 46);
 export const LAKE_BASIN: Feature = { x: lakeMid.x, z: lakeMid.z, r: 34, h: -9 };
 export const LAKE_LEVEL = landHeightBase(lakeMid.x, lakeMid.z) - 4.6;
 
-const FEATURES: Feature[] = [TUNNEL_HILL, CUTTING_RIDGE, LAKE_BASIN];
+// the tunnel is not in here — it's a ridge with a height target, applied below
+const FEATURES: Feature[] = [CUTTING_RIDGE, LAKE_BASIN];
 
 /* -------------------------------------------------------------- terrain --- */
 
@@ -119,12 +187,22 @@ export function landHeight(x: number, z: number) {
     const d = Math.hypot(x - f.x, z - f.z);
     if (d < f.r) h += f.h * fade(1 - d / f.r);
   }
+  // The tunnel ridge is a height target rather than a bump added on top: it
+  // has to clear the bore whatever the ground underneath happens to be doing.
+  if (Math.hypot(x - TUNNEL_HILL.x, z - TUNNEL_HILL.z) < TUNNEL_REACH) {
+    const { along, side, crown } = tunnelCoords(x, z);
+    const w = tunnelWeight(along, side);
+    if (w > 0) h += (crown - h) * w;
+  }
   return h;
 }
 
-/** Inside the tunnel hill the ground must stay put, or there is no hill left. */
+/** Inside the tunnel ridge the ground must stay put, or the corridor
+ *  flattening carves the hill away and the bore is left standing in the open. */
 export function insideTunnelHill(x: number, z: number) {
-  return Math.hypot(x - TUNNEL_HILL.x, z - TUNNEL_HILL.z) < TUNNEL_HILL.r * 0.78;
+  if (Math.hypot(x - TUNNEL_HILL.x, z - TUNNEL_HILL.z) >= TUNNEL_REACH) return false;
+  const { along, side } = tunnelCoords(x, z);
+  return tunnelWeight(along, side) > 0.02;
 }
 
 export const TERRAIN_SIZE = 420;

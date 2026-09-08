@@ -29,6 +29,8 @@ import {
   buildTerrainGeometry,
   groundHeightNear,
   landHeight,
+  BORE_LIFT,
+  BORE_RADIUS,
 } from "@/lib/terrain";
 import type { TrainConfig } from "@/lib/parts";
 
@@ -357,7 +359,7 @@ function Tunnel() {
   const to = TUNNEL_TO * ROUTE_LENGTH;
 
   const bore = useMemo(
-    () => new THREE.TubeGeometry(new SubRouteCurve(from, to, 1.7), 120, 3.1, 16, false),
+    () => new THREE.TubeGeometry(new SubRouteCurve(from, to, BORE_LIFT), 160, BORE_RADIUS, 16, false),
     [from, to]
   );
 
@@ -1067,7 +1069,15 @@ function Driver({
     }
 
     if (cameraMode === "chase") {
-      desired.set(pos.x - tan.x * 9.5, pos.y + 4.4, pos.z - tan.z * 9.5);
+      // Normally the camera rides above and behind — but that puts it through
+      // the roof of the bore, and inside the hill that means the camera is in
+      // solid rock, seeing the terrain's culled back faces and so straight
+      // through the world. In the tunnel it ducks down and closes up to stay
+      // inside the tube with the train.
+      const k = tunnelFactor.current ?? 0;
+      const back = 9.5 - 3.2 * k;
+      const up = 4.4 - 1.9 * k;
+      desired.set(pos.x - tan.x * back, pos.y + up, pos.z - tan.z * back);
       camera.position.lerp(desired, 1 - Math.pow(0.0016, dt));
       lookTarget.set(pos.x + tan.x * 4, pos.y + 1.4, pos.z + tan.z * 4);
     } else if (cameraMode === "cab") {
