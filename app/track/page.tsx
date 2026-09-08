@@ -124,7 +124,7 @@ export default function TrackPage() {
       <div className="safe-top safe-x pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between p-3">
         <Link
           href="/garage"
-          className="ws-btn pointer-events-auto rounded px-4 py-2 text-xl active:scale-95"
+          className="pointer-events-auto rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-lg backdrop-blur-sm transition active:scale-95 active:bg-black/45"
           aria-label="回車庫"
         >
           🔧
@@ -137,10 +137,10 @@ export default function TrackPage() {
               onClick={() => setCameraMode(c.mode)}
               aria-label={c.label}
               title={c.label}
-              className={`rounded border px-4 py-2 text-xl transition active:scale-95 ${
+              className={`rounded-lg border px-3 py-1.5 text-lg backdrop-blur-sm transition active:scale-95 ${
                 cameraMode === c.mode
-                  ? "border-[#e63b2e] bg-[#2a1815]"
-                  : "border-[#2c3d35] bg-[#16211c]"
+                  ? "border-[#e63b2e]/80 bg-[#e63b2e]/35"
+                  : "border-white/20 bg-black/25"
               }`}
             >
               {c.icon}
@@ -155,17 +155,10 @@ export default function TrackPage() {
       </div>
 
       {!inCab && (
-        <div className="safe-bottom safe-x pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-4">
-          <button
-            type="button"
-            {...holdProps("brake")}
-            aria-label="煞車"
-            className="pointer-events-auto rounded-2xl bg-[#c0392b] px-10 py-7 text-5xl text-white shadow-[0_6px_0_#7a1f16] active:translate-y-1 active:shadow-[0_2px_0_#7a1f16]"
-          >
-            🛑
-          </button>
-
-          <div className="pointer-events-auto flex flex-col items-center gap-2">
+        <>
+          {/* Direction lives over on the left, away from the driving hand — it's
+              set once at a standstill, not used while running. */}
+          <div className="safe-bottom safe-x pointer-events-none absolute bottom-0 left-0 z-20 p-3">
             <button
               type="button"
               onClick={() => {
@@ -174,29 +167,44 @@ export default function TrackPage() {
                 if (Math.abs(speedRef.current) < 0.6) setReverser((r) => (r === 1 ? -1 : 1));
               }}
               aria-label={reverser === 1 ? "目前前進,點一下改後退" : "目前後退,點一下改前進"}
-              className="ws-btn rounded-full px-5 py-3 text-2xl active:scale-90"
+              className="pointer-events-auto rounded-full border border-white/20 bg-black/25 px-4 py-2 text-xl backdrop-blur-sm transition active:scale-90 active:bg-black/45"
             >
               {reverser === 1 ? "⬆️" : "⬇️"}
             </button>
+          </div>
+
+          {/* The driving controls sit together under the right thumb, stacked
+              品-fashion: whistle up top, brake and throttle beneath. Kept small
+              and see-through so they don't eat the view out of the window. */}
+          <div className="safe-bottom safe-x pointer-events-none absolute bottom-0 right-0 z-20 flex flex-col items-center gap-2 p-3">
             <button
               type="button"
               onClick={honk}
               aria-label="鳴笛"
-              className="ws-btn-red rounded-full px-7 py-5 text-4xl active:scale-90"
+              className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full border border-white/25 bg-[#e63b2e]/35 text-2xl backdrop-blur-sm transition active:scale-90 active:bg-[#e63b2e]/70"
             >
               📯
             </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                {...holdProps("brake")}
+                aria-label="煞車"
+                className="pointer-events-auto flex h-[72px] w-[72px] items-center justify-center rounded-2xl border border-white/25 bg-[#c0392b]/35 text-3xl backdrop-blur-sm transition active:scale-95 active:bg-[#c0392b]/80"
+              >
+                🛑
+              </button>
+              <button
+                type="button"
+                {...holdProps("throttle")}
+                aria-label="油門"
+                className="pointer-events-auto flex h-[72px] w-[72px] items-center justify-center rounded-2xl border border-white/25 bg-[#2f9e44]/35 text-3xl backdrop-blur-sm transition active:scale-95 active:bg-[#2f9e44]/80"
+              >
+                ▶️
+              </button>
+            </div>
           </div>
-
-          <button
-            type="button"
-            {...holdProps("throttle")}
-            aria-label="油門"
-            className="pointer-events-auto rounded-2xl bg-[#2f9e44] px-10 py-7 text-5xl text-white shadow-[0_6px_0_#1c6129] active:translate-y-1 active:shadow-[0_2px_0_#1c6129]"
-          >
-            ▶️
-          </button>
-        </div>
+        </>
       )}
 
       <div className="pointer-events-none absolute inset-0 z-30 hidden items-center justify-center bg-[#0b100e]/95 text-center text-[#e8ede9] portrait:max-md:flex">
