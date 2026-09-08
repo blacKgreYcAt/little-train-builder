@@ -216,8 +216,10 @@ export default function TrackPage() {
       </div>
 
       {pickerOpen && (
-        <div className="safe-top safe-x pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-end p-3 pt-16">
-          <div className="pointer-events-auto flex flex-col gap-2 rounded-xl border border-white/20 bg-black/45 p-2 backdrop-blur-md">
+        <div className="safe-top safe-x pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-end p-3">
+          {/* the offset is a margin on the panel, not padding on this wrapper:
+              .safe-top sets padding-top itself and would override pt-* */}
+          <div className="pointer-events-auto mt-12 flex flex-col gap-2 rounded-xl border border-white/20 bg-black/45 p-2 backdrop-blur-md">
             <div className="flex gap-2">
               {TIME_ORDER.map((t) => (
                 <button
@@ -268,6 +270,14 @@ export default function TrackPage() {
                   {SKY_ICON[w]}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setPickerOpen(false)}
+                aria-label="關閉"
+                className="ml-1 h-12 w-12 rounded-lg border border-white/25 bg-[#2f9e44]/50 text-2xl transition active:scale-90"
+              >
+                ✓
+              </button>
             </div>
           </div>
         </div>
