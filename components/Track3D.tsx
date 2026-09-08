@@ -34,6 +34,8 @@ import {
 } from "@/lib/terrain";
 import type { TrainConfig } from "@/lib/parts";
 import { moodFor, type Mood, type SkyKey, type WeatherChoice } from "@/lib/weather";
+import { applyRoute } from "@/lib/world";
+import type { RouteKey } from "@/lib/routes";
 
 /* ------------------------------------------------------------ track bed --- */
 
@@ -1269,6 +1271,7 @@ export default function Track3D({
   cameraMode,
   onWhistle,
   weather,
+  route,
 }: {
   config: TrainConfig;
   controlsRef: React.RefObject<Controls>;
@@ -1276,8 +1279,12 @@ export default function Track3D({
   cameraMode: CameraMode;
   onWhistle: () => void;
   weather: WeatherChoice;
+  route: RouteKey;
 }) {
   const mood = useMemo(() => moodFor(weather.time, weather.sky), [weather.time, weather.sky]);
+  // during render, so the curve and the terrain chapters are already in place
+  // before any child's useMemo builds geometry from them
+  useMemo(() => applyRoute(route), [route]);
   const [canvasKey, setCanvasKey] = useState(0);
   /** How far the engine has travelled — shared so the lighting knows when it
       is inside the hill. */
@@ -1291,7 +1298,7 @@ export default function Track3D({
 
   return (
     <Canvas
-      key={canvasKey}
+      key={`${canvasKey}-${route}`}
       shadows
       // capped for iPad/iPhone retina — full DPR murders the frame rate
       dpr={[1, 1.6]}

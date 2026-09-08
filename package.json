@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:routes": "npx tsx scripts/check-routes.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.8",

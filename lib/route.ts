@@ -1,51 +1,39 @@
 import * as THREE from "three";
+import { DEFAULT_ROUTE, ROUTES, type RouteKey } from "./routes";
 
 /**
- * A figure-of-eight route that climbs, crosses over itself on a bridge, then
- * drops back down. Points are (x, y, z); y is the height above the ground, so
- * the low pass through the middle runs underneath the high one.
+ * The line the train runs on.
  *
- * The two passes through the centre are the interesting bit: the loop reaches
- * (0, 0, 0) heading +X+Z, and later (0, 5.2, 0) heading -X+Z — same spot on the
- * map, 5.2 units apart vertically, which is the bridge.
+ * Which route is active can change, so `routeCurve` and `ROUTE_LENGTH` are
+ * live bindings rather than frozen constants — importers see the new values
+ * after `setActiveRoute`. Everything derived from them (the terrain chapters,
+ * and every geometry built in a useMemo) has to be rebuilt afterwards, which
+ * is what `applyRoute` in lib/world.ts exists to coordinate.
  */
-const CONTROL_POINTS: [number, number, number][] = [
-  // --- east lobe: the long one. Big sweeping curves and a summit that isn't
-  //     at the top of the climb, so there's a dip to run down into and a short
-  //     sharp pull back out of it.
-  [0, 0.0, 0], // A — low crossing
-  [30, 0.25, 27],
-  [66, 1.2, 41],
-  [100, 2.4, 33],
-  [117, 1.1, 6], // far east — the dip
-  [104, 2.9, -23],
-  [72, 3.8, -41],
-  [34, 4.7, -29],
-  [10, 5.15, -12],
-  [0, 5.4, 0], // B — high crossing, on the bridge
-  // --- west lobe: shorter and tighter, so the second half of the lap is a
-  //     different ride from the first rather than its mirror image.
-  [-22, 5.0, 18],
-  [-52, 4.2, 30],
-  [-74, 3.3, 17],
-  [-76, 2.4, -7],
-  [-57, 1.5, -25],
-  [-31, 0.7, -30],
-  [-12, 0.25, -18],
-];
+function buildCurve(key: RouteKey) {
+  const curve = new THREE.CatmullRomCurve3(
+    ROUTES[key].points.map(([x, y, z]) => new THREE.Vector3(x, y, z)),
+    true,
+    // centripetal avoids the overshoot/cusps a uniform spline gives on unevenly
+    // spaced control points
+    "centripetal",
+    0.5
+  );
+  // Denser arc-length table => steadier speed and smoother geometry.
+  curve.arcLengthDivisions = 3000;
+  return curve;
+}
 
-export const routeCurve = new THREE.CatmullRomCurve3(
-  CONTROL_POINTS.map(([x, y, z]) => new THREE.Vector3(x, y, z)),
-  true,
-  // centripetal avoids the overshoot/cusps a uniform spline gives on unevenly
-  // spaced control points
-  "centripetal",
-  0.5
-);
-// Denser arc-length table => steadier speed and smoother geometry.
-routeCurve.arcLengthDivisions = 3000;
+export let activeRoute: RouteKey = DEFAULT_ROUTE;
+export let routeCurve = buildCurve(DEFAULT_ROUTE);
+export let ROUTE_LENGTH = routeCurve.getLength();
 
-export const ROUTE_LENGTH = routeCurve.getLength();
+/** Swaps the line. Callers must rebuild the terrain chapters afterwards. */
+export function setActiveRoute(key: RouteKey) {
+  activeRoute = key;
+  routeCurve = buildCurve(key);
+  ROUTE_LENGTH = routeCurve.getLength();
+}
 
 /** Half the distance between the rails, and where the railhead sits. */
 export const GAUGE = 0.72;

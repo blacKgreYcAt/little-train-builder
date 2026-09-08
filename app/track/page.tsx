@@ -17,6 +17,14 @@ import {
   loadWeather,
   type WeatherChoice,
 } from "@/lib/weather";
+import {
+  DEFAULT_ROUTE,
+  ROUTES,
+  ROUTE_ORDER,
+  ROUTE_STORAGE_KEY,
+  loadRoute,
+  type RouteKey,
+} from "@/lib/routes";
 
 const CAMERAS: { mode: CameraMode; label: string; icon: string }[] = [
   { mode: "chase", label: "跟著跑", icon: "🎥" },
@@ -35,9 +43,22 @@ export default function TrackPage() {
   const [weather, setWeather] = useState<WeatherChoice>(DEFAULT_WEATHER);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  const [route, setRoute] = useState<RouteKey>(DEFAULT_ROUTE);
+
   useEffect(() => {
     setWeather(loadWeather());
+    setRoute(loadRoute());
   }, []);
+
+  const chooseRoute = (key: RouteKey) => {
+    primeAudio();
+    setRoute(key);
+    try {
+      window.localStorage.setItem(ROUTE_STORAGE_KEY, key);
+    } catch {
+      // private browsing — the choice just won't be remembered
+    }
+  };
 
   // takes a patch and updates from the previous value, so two changes in quick
   // succession can't each overwrite the other with stale state
@@ -152,6 +173,7 @@ export default function TrackPage() {
           cameraMode={cameraMode}
           onWhistle={honk}
           weather={weather}
+          route={route}
         />
       </div>
 
@@ -210,6 +232,23 @@ export default function TrackPage() {
                   }`}
                 >
                   {TIME_ICON[t]}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              {ROUTE_ORDER.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => chooseRoute(r)}
+                  aria-label={r}
+                  className={`h-12 w-12 rounded-lg border text-2xl transition active:scale-90 ${
+                    route === r
+                      ? "border-[#f4b942] bg-[#f4b942]/30"
+                      : "border-white/20 bg-black/25"
+                  }`}
+                >
+                  {ROUTES[r].icon}
                 </button>
               ))}
             </div>
