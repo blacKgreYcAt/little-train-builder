@@ -33,6 +33,7 @@ import {
   BORE_RADIUS,
 } from "@/lib/terrain";
 import type { TrainConfig } from "@/lib/parts";
+import { moodFor, type Mood, type SkyKey, type WeatherChoice } from "@/lib/weather";
 
 /* ------------------------------------------------------------ track bed --- */
 
@@ -673,7 +674,7 @@ function Birds() {
 }
 
 /** Placed against the route and dropped onto the land, so nothing floats. */
-function Scenery() {
+function Scenery({ mood }: { mood: Mood }) {
   const samples = useMemo(() => buildRouteSamples(), []);
   const terrain = useMemo(() => buildTerrainGeometry(), []);
 
@@ -747,7 +748,15 @@ function Scenery() {
       <mesh geometry={terrain} receiveShadow>
         {/* the patchwork field colours multiply over the grass, so the
             texture reads as different crops rather than one flat lawn */}
-        <meshStandardMaterial map={tiled("grass.jpg", 150, 150)} vertexColors roughness={1} />
+        {/* keyed so the material is rebuilt when snow drops the map and the
+            vertex colours — toggling those needs a fresh shader, not a prop */}
+        <meshStandardMaterial
+          key={mood.snowy ? "snow" : "grass"}
+          map={mood.snowy ? undefined : tiled("grass.jpg", 150, 150)}
+          color={mood.snowy ? "#f2f7fc" : mood.groundTint}
+          vertexColors={!mood.snowy}
+          roughness={mood.snowy ? 0.72 : 1}
+        />
       </mesh>
 
       {trees.map((t, i) => (
@@ -809,16 +818,21 @@ const SKY_FRAG = `
 
 /** Gradient dome plus drifting cloud banks — a flat blue backdrop was half the
  *  reason the world looked like a diorama. */
-function Sky() {
+function Sky({ mood }: { mood: Mood }) {
   const clouds = useRef<THREE.Group>(null);
 
   const uniforms = useMemo(
     () => ({
-      topColour: { value: new THREE.Color("#3f8fd6") },
-      horizonColour: { value: new THREE.Color("#cfe6f5") },
+      topColour: { value: new THREE.Color(mood.skyTop) },
+      horizonColour: { value: new THREE.Color(mood.skyHorizon) },
     }),
     []
   );
+  // the dome material is built once, so push colour changes into the uniforms
+  useEffect(() => {
+    uniforms.topColour.value.set(mood.skyTop);
+    uniforms.horizonColour.value.set(mood.skyHorizon);
+  }, [uniforms, mood.skyTop, mood.skyHorizon]);
 
   const puffs = useMemo(() => {
     let seed = 91;
@@ -860,7 +874,7 @@ function Sky() {
       {/* sun */}
       <mesh position={[300, 260, 190]}>
         <sphereGeometry args={[26, 16, 12]} />
-        <meshBasicMaterial color="#fff6d8" fog={false} />
+        <meshBasicMaterial color={mood.showSun ? "#fff6d8" : "#000000"} transparent opacity={mood.showSun ? 1 : 0} fog={false} />
       </mesh>
 
       <group ref={clouds}>
@@ -868,8 +882,9 @@ function Sky() {
           <sprite key={i} position={p.pos} scale={[p.s * 4.4, p.s * 2.6, 1]}>
             <spriteMaterial
               map={sprite("cloud.png")}
+              color={mood.cloudTint}
               transparent
-              opacity={0.72 + p.f * 0.22}
+              opacity={(0.72 + p.f * 0.22) * mood.cloudOpacity}
               depthWrite={false}
               fog={false}
             />
@@ -888,15 +903,19 @@ function Sky() {
 function TunnelMood({
   distanceRef,
   factorRef,
+  mood,
 }: {
   distanceRef: React.RefObject<number>;
   factorRef: React.RefObject<number>;
+  mood: Mood;
 }) {
   const hemi = useRef<THREE.HemisphereLight>(null);
   const sun = useRef<THREE.DirectionalLight>(null);
   const { scene } = useThree();
 
-  const dayFog = useMemo(() => new THREE.Color("#a8dcf7"), []);
+  // the tunnel darkens whatever the weather already is, rather than driving
+  // towards a fixed daylight-to-black ramp
+  const openFog = useMemo(() => new THREE.Color(mood.fogColour), [mood.fogColour]);
   const darkFog = useMemo(() => new THREE.Color("#0a0c0b"), []);
   const scratch = useMemo(() => new THREE.Color(), []);
   const inside = useRef(0);
@@ -915,26 +934,32 @@ function TunnelMood({
     inside.current += (target - inside.current) * Math.min(1, dt * 6);
     const k = inside.current;
 
-    if (hemi.current) hemi.current.intensity = 0.9 - k * 0.78;
-    if (sun.current) sun.current.intensity = 1.45 - k * 1.32;
+    if (hemi.current) hemi.current.intensity = mood.hemiIntensity * (1 - k * 0.87);
+    if (sun.current) sun.current.intensity = mood.sunIntensity * (1 - k * 0.91);
     factorRef.current = k;
 
     const fog = scene.fog as THREE.Fog | null;
     if (fog) {
-      scratch.copy(dayFog).lerp(darkFog, k);
+      scratch.copy(openFog).lerp(darkFog, k);
       fog.color.copy(scratch);
-      fog.near = 150 - k * 146;
-      fog.far = 480 - k * 430;
+      fog.near = mood.fogNear * (1 - k) + 4 * k;
+      fog.far = mood.fogFar * (1 - k) + 50 * k;
     }
   });
 
   return (
     <>
-      <hemisphereLight ref={hemi} color="#cfeaff" groundColor="#7cc264" intensity={0.9} />
+      <hemisphereLight
+        ref={hemi}
+        color={mood.hemiSky}
+        groundColor={mood.hemiGround}
+        intensity={mood.hemiIntensity}
+      />
       <directionalLight
         ref={sun}
-        position={[70, 90, 50]}
-        intensity={1.45}
+        position={mood.sunPosition}
+        color={mood.sunColour}
+        intensity={mood.sunIntensity}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -945,6 +970,121 @@ function TunnelMood({
         shadow-camera-far={260}
       />
     </>
+  );
+}
+
+/* ---------------------------------------------------------- the weather --- */
+
+/**
+ * Rain and snow, as one instanced cloud of particles that travels with the
+ * camera so the player is always inside it. Rain falls fast and straight; snow
+ * drifts. `frustumCulled` has to be off — the instances move every frame, and
+ * three.js would otherwise cull the whole batch against its original bounds.
+ */
+function Precipitation({ kind }: { kind: SkyKey }) {
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  const rain = kind === "rain";
+  const COUNT = rain ? 520 : 420;
+  const SPREAD = 64;
+  const TOP = 44;
+
+  const drops = useMemo(
+    () =>
+      Array.from({ length: COUNT }, () => ({
+        x: (Math.random() - 0.5) * SPREAD,
+        y: Math.random() * TOP,
+        z: (Math.random() - 0.5) * SPREAD,
+        phase: Math.random() * Math.PI * 2,
+        speed: rain ? 30 + Math.random() * 16 : 3 + Math.random() * 2.2,
+      })),
+    [COUNT, rain]
+  );
+
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const { camera } = useThree();
+
+  useFrame(({ clock }, dt) => {
+    if (!mesh.current) return;
+    const step = Math.min(dt, 0.05);
+    const t = clock.elapsedTime;
+    for (let i = 0; i < COUNT; i++) {
+      const d = drops[i];
+      d.y -= d.speed * step;
+      if (d.y < 0) {
+        d.y += TOP;
+        d.x = (Math.random() - 0.5) * SPREAD;
+        d.z = (Math.random() - 0.5) * SPREAD;
+      }
+      // snow wanders on the way down; rain does not
+      const sway = rain ? 0 : Math.sin(t * 0.8 + d.phase) * 1.8;
+      const swayZ = rain ? 0 : Math.cos(t * 0.6 + d.phase) * 1.4;
+      dummy.position.set(
+        camera.position.x + d.x + sway,
+        camera.position.y + d.y - TOP * 0.55,
+        camera.position.z + d.z + swayZ
+      );
+      dummy.rotation.set(0, 0, rain ? 0.12 : 0);
+      dummy.updateMatrix();
+      mesh.current.setMatrixAt(i, dummy.matrix);
+    }
+    mesh.current.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <instancedMesh
+      ref={mesh}
+      args={[undefined, undefined, COUNT]}
+      frustumCulled={false}
+    >
+      {rain ? (
+        <boxGeometry args={[0.035, 1.1, 0.035]} />
+      ) : (
+        <sphereGeometry args={[0.11, 5, 4]} />
+      )}
+      <meshBasicMaterial
+        color={rain ? "#c6dcee" : "#ffffff"}
+        transparent
+        opacity={rain ? 0.42 : 0.9}
+        depthWrite={false}
+        fog={false}
+      />
+    </instancedMesh>
+  );
+}
+
+/** A dome of stars, only worth drawing once the sky is dark enough to see them. */
+function Stars({ amount }: { amount: number }) {
+  const geo = useMemo(() => {
+    let seed = 7717;
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    const pts: number[] = [];
+    for (let i = 0; i < 500; i++) {
+      // upper hemisphere only — stars under the ground help nobody
+      const a = rand() * Math.PI * 2;
+      const h = rand();
+      const r = Math.sqrt(1 - h * h);
+      pts.push(Math.cos(a) * r * 560, h * 520 + 20, Math.sin(a) * r * 560);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+    return g;
+  }, []);
+
+  return (
+    <points geometry={geo} frustumCulled={false}>
+      <pointsMaterial
+        color="#eaf1ff"
+        size={2.2}
+        sizeAttenuation={false}
+        transparent
+        opacity={amount}
+        depthWrite={false}
+        fog={false}
+      />
+    </points>
   );
 }
 
@@ -1128,13 +1268,16 @@ export default function Track3D({
   speedRef,
   cameraMode,
   onWhistle,
+  weather,
 }: {
   config: TrainConfig;
   controlsRef: React.RefObject<Controls>;
   speedRef: React.RefObject<number>;
   cameraMode: CameraMode;
   onWhistle: () => void;
+  weather: WeatherChoice;
 }) {
+  const mood = useMemo(() => moodFor(weather.time, weather.sky), [weather.time, weather.sky]);
   const [canvasKey, setCanvasKey] = useState(0);
   /** How far the engine has travelled — shared so the lighting knows when it
       is inside the hill. */
@@ -1155,16 +1298,18 @@ export default function Track3D({
       gl={{ powerPreference: "high-performance", antialias: true }}
       camera={{ position: [0, 8, -30], fov: 55, far: 700 }}
       onCreated={({ gl, scene }) => {
-        scene.fog = new THREE.Fog("#a8dcf7", 150, 480);
+        scene.fog = new THREE.Fog(mood.fogColour, mood.fogNear, mood.fogFar);
         gl.domElement.addEventListener("webglcontextlost", (e) => {
           e.preventDefault();
           setCanvasKey((v) => v + 1);
         });
       }}
     >
-      <Sky />
-      <TunnelMood distanceRef={distance} factorRef={tunnelFactor} />
-      <Scenery />
+      <Sky mood={mood} />
+      {mood.stars > 0.02 && <Stars amount={mood.stars} />}
+      {weather.sky !== "clear" && <Precipitation kind={weather.sky} />}
+      <TunnelMood distanceRef={distance} factorRef={tunnelFactor} mood={mood} />
+      <Scenery mood={mood} />
       <Track />
       <Signals distanceRef={distance} />
       <Driver

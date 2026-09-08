@@ -7,6 +7,16 @@ import CabOverlay from "@/components/CabOverlay";
 import { playWhistle, primeAudio } from "@/lib/sound";
 import { INITIAL_CONTROLS, type Controls } from "@/lib/driving";
 import { DEFAULT_CONFIG, loadConfig, type TrainConfig } from "@/lib/parts";
+import {
+  DEFAULT_WEATHER,
+  SKY_ICON,
+  SKY_ORDER,
+  TIME_ICON,
+  TIME_ORDER,
+  WEATHER_STORAGE_KEY,
+  loadWeather,
+  type WeatherChoice,
+} from "@/lib/weather";
 
 const CAMERAS: { mode: CameraMode; label: string; icon: string }[] = [
   { mode: "chase", label: "跟著跑", icon: "🎥" },
@@ -20,6 +30,29 @@ const REGULATOR_RATE = 1.6;
 export default function TrackPage() {
   const [config, setConfig] = useState<TrainConfig>(DEFAULT_CONFIG);
   const [cameraMode, setCameraMode] = useState<CameraMode>("chase");
+  // starts on the default and picks up the saved choice after mount, so the
+  // server-rendered markup and the first client render agree
+  const [weather, setWeather] = useState<WeatherChoice>(DEFAULT_WEATHER);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  useEffect(() => {
+    setWeather(loadWeather());
+  }, []);
+
+  // takes a patch and updates from the previous value, so two changes in quick
+  // succession can't each overwrite the other with stale state
+  const chooseWeather = (patch: Partial<WeatherChoice>) => {
+    primeAudio();
+    setWeather((prev) => {
+      const next = { ...prev, ...patch };
+      try {
+        window.localStorage.setItem(WEATHER_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // private browsing — the choice just won't be remembered
+      }
+      return next;
+    });
+  };
 
   const controlsRef = useRef<Controls>({ ...INITIAL_CONTROLS });
   const speedRef = useRef(0);
@@ -118,6 +151,7 @@ export default function TrackPage() {
           speedRef={speedRef}
           cameraMode={cameraMode}
           onWhistle={honk}
+          weather={weather}
         />
       </div>
 
@@ -130,6 +164,16 @@ export default function TrackPage() {
           🔧
         </Link>
         <div className="pointer-events-auto flex gap-2">
+          <button
+            type="button"
+            onClick={() => setPickerOpen((v) => !v)}
+            aria-label="天氣與時間"
+            className={`rounded-lg border px-3 py-1.5 text-lg backdrop-blur-sm transition active:scale-95 ${
+              pickerOpen ? "border-[#e63b2e]/80 bg-[#e63b2e]/35" : "border-white/20 bg-black/25"
+            }`}
+          >
+            {TIME_ICON[weather.time]}
+          </button>
           {CAMERAS.map((c) => (
             <button
               key={c.mode}
@@ -148,6 +192,47 @@ export default function TrackPage() {
           ))}
         </div>
       </div>
+
+      {pickerOpen && (
+        <div className="safe-top safe-x pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-end p-3 pt-16">
+          <div className="pointer-events-auto flex flex-col gap-2 rounded-xl border border-white/20 bg-black/45 p-2 backdrop-blur-md">
+            <div className="flex gap-2">
+              {TIME_ORDER.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => chooseWeather({ time: t })}
+                  aria-label={t}
+                  className={`h-12 w-12 rounded-lg border text-2xl transition active:scale-90 ${
+                    weather.time === t
+                      ? "border-[#e63b2e] bg-[#e63b2e]/30"
+                      : "border-white/20 bg-black/25"
+                  }`}
+                >
+                  {TIME_ICON[t]}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              {SKY_ORDER.map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => chooseWeather({ sky: w })}
+                  aria-label={w}
+                  className={`h-12 w-12 rounded-lg border text-2xl transition active:scale-90 ${
+                    weather.sky === w
+                      ? "border-[#3b8bff] bg-[#3b8bff]/30"
+                      : "border-white/20 bg-black/25"
+                  }`}
+                >
+                  {SKY_ICON[w]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* On the footplate you drive with the real levers, so the buttons go. */}
       <div className="pointer-events-none absolute inset-0 z-10">
