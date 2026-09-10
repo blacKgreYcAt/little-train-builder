@@ -120,6 +120,7 @@ export let LAKE_LEVEL = 0;
 
 let TUNNEL_AXIS: AxisSample[] = [];
 let FEATURES: Feature[] = [];
+let ROUTE_LOOKUP: ReturnType<typeof buildRouteLookup> | null = null;
 
 /**
  * Recomputes the landmarks for whatever route is now active. Must be called
@@ -159,6 +160,91 @@ export function rebuildChapters() {
   // the tunnel is not in here — it's a ridge with a height target, applied
   // in landHeight below
   FEATURES = [CUTTING_RIDGE, LAKE_BASIN];
+
+  ROUTE_LOOKUP = buildRouteLookup(buildRouteSamples(), FALLOFF);
+}
+
+/**
+ * The ground height the terrain mesh is built from: the land, pulled flat
+ * along the railway corridor where the line runs low.
+ */
+function groundAt(x: number, z: number): number {
+  const natural = landHeight(x, z);
+  const lookup = ROUTE_LOOKUP;
+  if (!lookup) return natural;
+
+  const near = lookup.map.get(
+    lookup.key(Math.floor(x / lookup.cell), Math.floor(z / lookup.cell))
+  );
+  let bestD = Infinity;
+  let bestY = 0;
+  if (near) {
+    for (const s of near) {
+      const d = Math.hypot(x - s.x, z - s.z);
+      if (d < bestD) {
+        bestD = d;
+        bestY = s.y;
+      }
+    }
+  }
+  if (bestD >= CORRIDOR + FALLOFF || insideTunnelHill(x, z)) return natural;
+
+  // Only low-lying track pulls the ground with it. Where the line is up on an
+  // embankment or the bridge, the earthworks carry it and the ground stays
+  // put — otherwise the terrain would fill in under the crossing.
+  const lowness = Math.max(0, Math.min(1, 1 - bestY / 2.2));
+  const t = Math.max(0, Math.min(1, (bestD - CORRIDOR) / FALLOFF));
+  const blend = (1 - fade(t)) * lowness;
+  return natural * (1 - blend) + bestY * blend;
+}
+
+/**
+ * True where the bore breaks through the ground surface.
+ *
+ * A heightfield cannot have a hole in it, so without cutting these triangles
+ * away the tunnel mouth is solid hillside — the ground sits seven units above
+ * the rails and the train drives straight into a grass bank. Inside the hill
+ * the crown is well clear of the bore, so nothing is cut there and the hill
+ * stays solid.
+ */
+export function insideTunnelMouth(x: number, z: number, height: number) {
+  if (!TUNNEL_AXIS.length) return false;
+  if (Math.hypot(x - TUNNEL_HILL.x, z - TUNNEL_HILL.z) > TUNNEL_REACH) return false;
+  let bestD = Infinity;
+  let best = TUNNEL_AXIS[0];
+  for (const s of TUNNEL_AXIS) {
+    const d = (x - s.x) * (x - s.x) + (z - s.z) * (z - s.z);
+    if (d < bestD) {
+      bestD = d;
+      best = s;
+    }
+  }
+  if (Math.sqrt(bestD) > BORE_RADIUS + 0.35) return false;
+  return height < best.y + BORE_LIFT + BORE_RADIUS;
+}
+
+/**
+ * Height of the terrain *as drawn*. The mesh is a grid roughly two units
+ * across, so a point between vertices sits on the bilinear patch, not on the
+ * analytic curve — and near the railway, where the corridor is narrower than
+ * one grid cell, those two disagree by a lot. Placing scenery with the
+ * analytic value is what left fences hanging in mid-air.
+ */
+export function terrainSurfaceAt(x: number, z: number) {
+  const cell = TERRAIN_SIZE / GRID;
+  const half = TERRAIN_SIZE / 2;
+  const gx = (x + half) / cell;
+  const gz = (z + half) / cell;
+  const i0 = Math.floor(gx);
+  const j0 = Math.floor(gz);
+  const fx = gx - i0;
+  const fz = gz - j0;
+  const at = (i: number, j: number) => groundAt(-half + i * cell, -half + j * cell);
+  const h00 = at(i0, j0);
+  const h10 = at(i0 + 1, j0);
+  const h01 = at(i0, j0 + 1);
+  const h11 = at(i0 + 1, j0 + 1);
+  return (h00 * (1 - fx) + h10 * fx) * (1 - fz) + (h01 * (1 - fx) + h11 * fx) * fz;
 }
 
 /** Where a point sits relative to the tunnel axis, and how high the ground
@@ -266,9 +352,6 @@ function buildRouteLookup(samples: RouteSample[], cell: number) {
 }
 
 export function buildTerrainGeometry() {
-  const samples = buildRouteSamples();
-  const lookup = buildRouteLookup(samples, FALLOFF);
-
   const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, GRID, GRID);
   geo.rotateX(-Math.PI / 2); // into the XZ plane
 
@@ -277,47 +360,48 @@ export function buildTerrainGeometry() {
   const c = new THREE.Color();
   const grass = new THREE.Color("#6aa84f");
 
+  const rock = new THREE.Color("#8d8377");
+
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
-
-    // nearest bit of railway
-    const k = lookup.key(Math.floor(x / lookup.cell), Math.floor(z / lookup.cell));
-    const near = lookup.map.get(k);
-    let bestD = Infinity;
-    let bestY = 0;
-    if (near) {
-      for (const s of near) {
-        const d = Math.hypot(x - s.x, z - s.z);
-        if (d < bestD) {
-          bestD = d;
-          bestY = s.y;
-        }
-      }
-    }
-
-    const natural = landHeight(x, z);
-    let height = natural;
-
-    if (bestD < CORRIDOR + FALLOFF && !insideTunnelHill(x, z)) {
-      // Only low-lying track pulls the ground with it. Where the line is up on
-      // an embankment or the bridge, the earthworks carry it and the ground
-      // stays put — otherwise the terrain would fill in under the crossing.
-      const lowness = Math.max(0, Math.min(1, 1 - bestY / 2.2));
-      const t = Math.max(0, Math.min(1, (bestD - CORRIDOR) / FALLOFF));
-      const blend = (1 - fade(t)) * lowness;
-      height = natural * (1 - blend) + bestY * blend;
-    }
-
+    const height = groundAt(x, z);
     pos.setY(i, height);
 
     // patchwork fields, with the greens deepening in the hollows
     const field = Math.floor(fbm(x * 0.014 + 11, z * 0.014 + 7, 2) * FIELD_COLOURS.length);
     c.set(FIELD_COLOURS[Math.min(FIELD_COLOURS.length - 1, Math.max(0, field))]);
     c.lerp(grass, 0.25 + Math.max(0, Math.min(1, (height + 6) / 18)) * 0.2);
+
+    // Steep ground is bare rock, not lawn. Grass running up a cliff face is
+    // most of why the tunnel mouth and the cuttings looked wrong.
+    const slope =
+      Math.hypot(
+        landHeight(x + 1.4, z) - landHeight(x - 1.4, z),
+        landHeight(x, z + 1.4) - landHeight(x, z - 1.4)
+      ) / 2.8;
+    c.lerp(rock, Math.max(0, Math.min(1, (slope - 0.6) / 0.8)));
     colours[i * 3] = c.r;
     colours[i * 3 + 1] = c.g;
     colours[i * 3 + 2] = c.b;
+  }
+
+  // Cut the mouth open. A heightfield has no holes, so the triangles where the
+  // bore breaks the surface have to be dropped from the index — otherwise the
+  // portal frames a solid grass bank and the train drives into the hill.
+  const index = geo.getIndex();
+  if (index) {
+    const kept: number[] = [];
+    for (let i = 0; i < index.count; i += 3) {
+      const a = index.getX(i);
+      const b = index.getX(i + 1);
+      const d = index.getX(i + 2);
+      const cx = (pos.getX(a) + pos.getX(b) + pos.getX(d)) / 3;
+      const cz = (pos.getZ(a) + pos.getZ(b) + pos.getZ(d)) / 3;
+      const cy = (pos.getY(a) + pos.getY(b) + pos.getY(d)) / 3;
+      if (!insideTunnelMouth(cx, cz, cy)) kept.push(a, b, d);
+    }
+    geo.setIndex(kept);
   }
 
   geo.setAttribute("color", new THREE.BufferAttribute(colours, 3));
@@ -332,23 +416,14 @@ export function buildTerrainGeometry() {
 export function groundHeightNear(
   x: number,
   z: number,
-  samples: RouteSample[]
+  _samples?: RouteSample[]
 ): number {
-  let bestD = Infinity;
-  let bestY = 0;
-  for (const s of samples) {
-    const d = Math.hypot(x - s.x, z - s.z);
-    if (d < bestD) {
-      bestD = d;
-      bestY = s.y;
-    }
-  }
-  const natural = landHeight(x, z);
-  if (bestD >= CORRIDOR + FALLOFF || insideTunnelHill(x, z)) return natural;
-  const lowness = Math.max(0, Math.min(1, 1 - bestY / 2.2));
-  const t = Math.max(0, Math.min(1, (bestD - CORRIDOR) / FALLOFF));
-  const blend = (1 - fade(t)) * lowness;
-  return natural * (1 - blend) + bestY * blend;
+  return terrainSurfaceAt(x, z);
 }
 
 export { buildRouteSamples };
+
+// The chapters must exist the moment anything reads the terrain. lib/world's
+// applyRoute does this on a route change; this covers the first import, so
+// pulling in terrain on its own is not a silent trap.
+rebuildChapters();

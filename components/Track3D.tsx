@@ -462,43 +462,74 @@ function Fences({
     const p = new THREE.Vector3();
     const tan = new THREE.Vector3();
     const lat = new THREE.Vector3();
-    const q = new THREE.Quaternion();
-    let i = 0;
+
+    // Where every post stands, worked out up front: a rail has to reach the
+    // *next* post, and it can only do that if it knows how high that one is.
+    type Post = { x: number; y: number; z: number; yaw: number };
+    const line: Post[][] = [[], []];
     for (let n = 0; n * SPACING < ROUTE_LENGTH; n++) {
       sampleRoute(n * SPACING, p, tan);
       lateralAt(tan, lat);
-      orientationFromTangent(tan, q);
-      for (const side of [1, -1] as const) {
+      const yaw = Math.atan2(tan.x, tan.z);
+      [1, -1].forEach((side, k) => {
         const x = p.x + lat.x * OFFSET * side;
         const z = p.z + lat.z * OFFSET * side;
-        const y = groundHeightNear(x, z, samples);
+        line[k].push({ x, y: groundHeightNear(x, z), z, yaw });
+      });
+    }
 
-        dummy.position.set(x, y + 0.55, z);
-        dummy.quaternion.copy(q);
+    const from = new THREE.Vector3();
+    const to = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    const X_AXIS = new THREE.Vector3(1, 0, 0);
+    let i = 0;
+
+    for (const side of line) {
+      for (let n = 0; n < side.length; n++) {
+        const a = side[n];
+        const b = side[(n + 1) % side.length];
+
+        // a fence post stands upright, whatever the track is doing — only the
+        // yaw follows the line
+        dummy.position.set(a.x, a.y + 0.5, a.z);
+        dummy.rotation.set(0, a.yaw, 0);
+        dummy.scale.set(1, 1, 1);
         dummy.updateMatrix();
         posts.current?.setMatrixAt(i, dummy.matrix);
 
-        // rails reach forward to meet the next post
+        // Rails span from this post to the next and slope with the ground.
+        // Laid flat at one end's height they floated clear of every dip.
+        from.set(a.x, a.y, a.z);
+        to.set(b.x, b.y, b.z);
+        dir.subVectors(to, from);
+        const span = dir.length();
+        // the wrap-around pair jumps the whole lap; leave that gap open
+        const sane = span < SPACING * 2.2;
+        dummy.scale.set(sane ? span / SPACING : 0, 1, 1);
+        dummy.quaternion.setFromUnitVectors(X_AXIS, dir.normalize());
+
         dummy.position.set(
-          x + tan.x * SPACING * 0.5,
-          y + 0.42,
-          z + tan.z * SPACING * 0.5
+          (a.x + b.x) / 2,
+          (a.y + b.y) / 2 + 0.42,
+          (a.z + b.z) / 2
         );
         dummy.updateMatrix();
         railsLow.current?.setMatrixAt(i, dummy.matrix);
-        dummy.position.y = y + 0.82;
+
+        dummy.position.y = (a.y + b.y) / 2 + 0.82;
         dummy.updateMatrix();
         railsHigh.current?.setMatrixAt(i, dummy.matrix);
         i++;
       }
     }
+
     for (const m of [posts, railsLow, railsHigh]) {
       if (m.current) {
         m.current.count = i;
         m.current.instanceMatrix.needsUpdate = true;
       }
     }
-  }, [samples, count]);
+  }, [count]);
 
   const timber = (
     <meshStandardMaterial color={underSnow("#6b5334", snowy, 0.45)} roughness={0.95} />
@@ -506,7 +537,7 @@ function Fences({
   return (
     <group>
       <instancedMesh ref={posts} args={[undefined, undefined, count]} castShadow>
-        <boxGeometry args={[0.09, 1.1, 0.09]} />
+        <boxGeometry args={[0.09, 1.25, 0.09]} />
         {timber}
       </instancedMesh>
       <instancedMesh ref={railsLow} args={[undefined, undefined, count]} castShadow>
