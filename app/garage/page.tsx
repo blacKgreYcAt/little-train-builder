@@ -7,6 +7,14 @@ import PartTray from "@/components/PartTray";
 import { primeAudio } from "@/lib/sound";
 import type { FaceConfig } from "@/lib/face";
 import {
+  DEFAULT_ROUTE,
+  ROUTES,
+  ROUTE_ORDER,
+  ROUTE_STORAGE_KEY,
+  loadRoute,
+  type RouteKey,
+} from "@/lib/routes";
+import {
   BODY_COLORS,
   DEFAULT_CONFIG,
   STORAGE_KEY,
@@ -48,10 +56,25 @@ export default function GaragePage() {
   const [drag, setDrag] = useState({ active: false, overDropZone: false });
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
+  const [route, setRoute] = useState<RouteKey>(DEFAULT_ROUTE);
+
   useEffect(() => {
     setConfig(loadConfig());
+    setRoute(loadRoute());
     setMounted(true);
   }, []);
+
+  // the same key the track page reads, so the line you pick here is the one
+  // you set off on
+  const chooseRoute = (key: RouteKey) => {
+    primeAudio();
+    setRoute(key);
+    try {
+      window.localStorage.setItem(ROUTE_STORAGE_KEY, key);
+    } catch {
+      // private browsing — the choice just won't be remembered
+    }
+  };
 
   useEffect(() => {
     if (!mounted) return;
@@ -79,7 +102,24 @@ export default function GaragePage() {
           <div className="ws-label">Steam Workshop</div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="ws-label hidden sm:inline">Garage / 01</span>
+          <div className="flex gap-1">
+            {ROUTE_ORDER.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => chooseRoute(r)}
+                aria-label={r}
+                title={ROUTES[r].blurb}
+                className={`rounded-lg border px-2 py-1.5 text-lg transition active:scale-90 ${
+                  route === r
+                    ? "border-[#f4b942] bg-[#f4b942]/25"
+                    : "border-[#2c3d35] bg-[#16211c] opacity-70"
+                }`}
+              >
+                {ROUTES[r].icon}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             onClick={() => {
@@ -150,7 +190,7 @@ export default function GaragePage() {
             >
               🛤️ 出發!
             </Link>
-            <div className="ws-label mt-2 text-center">8 字形路線 · 隧道 · 高架橋</div>
+            <div className="ws-label mt-2 text-center">{ROUTES[route].blurb}</div>
           </div>
         </aside>
       </div>

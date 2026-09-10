@@ -15,6 +15,8 @@ export interface RouteDef {
   key: RouteKey;
   /** picked by picture, so no words */
   icon: string;
+  /** one line for the garage card — the only place the route is described */
+  blurb: string;
   points: [number, number, number][];
   /** fraction of the lap where the tunnel's midpoint sits */
   tunnelAt: number;
@@ -30,6 +32,7 @@ export const ROUTES: Record<RouteKey, RouteDef> = {
   figure8: {
     key: "figure8",
     icon: "🌀",
+    blurb: "8 字形 · 立體交叉 · 隧道",
     tunnelAt: 0.315,
     cuttingAt: 0.62,
     lakeAt: 0.83,
@@ -59,6 +62,7 @@ export const ROUTES: Record<RouteKey, RouteDef> = {
   lakeside: {
     key: "lakeside",
     icon: "🏞️",
+    blurb: "湖畔大圈 · 平緩好開",
     tunnelAt: 0.47,
     cuttingAt: 0.13,
     lakeAt: 0.79,
@@ -83,6 +87,7 @@ export const ROUTES: Record<RouteKey, RouteDef> = {
   mountain: {
     key: "mountain",
     icon: "⛰️",
+    blurb: "山線 · 陡坡 · 急彎",
     tunnelAt: 0.30,
     cuttingAt: 0.68,
     lakeAt: 0.86,
@@ -109,6 +114,7 @@ export const ROUTES: Record<RouteKey, RouteDef> = {
   highline: {
     key: "highline",
     icon: "🌉",
+    blurb: "高架線 · 整圈跑在路堤上",
     tunnelAt: 0.55,
     cuttingAt: 0.9,
     lakeAt: 0.24,

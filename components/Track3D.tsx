@@ -33,7 +33,7 @@ import {
   BORE_RADIUS,
 } from "@/lib/terrain";
 import type { TrainConfig } from "@/lib/parts";
-import { moodFor, type Mood, type SkyKey, type WeatherChoice } from "@/lib/weather";
+import { mixColour, moodFor, type Mood, type SkyKey, type WeatherChoice } from "@/lib/weather";
 import { applyRoute } from "@/lib/world";
 import type { RouteKey } from "@/lib/routes";
 
@@ -255,8 +255,17 @@ function Track() {
 type Placed = { x: number; y: number; z: number; s: number; kind: number };
 
 /** Conifer, round-headed broadleaf, and a scrubby bush. */
-function Tree({ p }: { p: Placed }) {
-  const trunk = "#7a5a3c";
+/**
+ * Snow settles on everything outdoors, not just the ground. Without this the
+ * fields go white and the trees and fences stay high summer, which reads as a
+ * bug rather than as weather.
+ */
+function underSnow(colour: string, snowy: boolean, amount = 0.55) {
+  return snowy ? mixColour(colour, "#e9f1f8", amount) : colour;
+}
+
+function Tree({ p, snowy }: { p: Placed; snowy: boolean }) {
+  const trunk = underSnow("#7a5a3c", snowy, 0.22);
   if (p.kind === 0) {
     return (
       <group position={[p.x, p.y, p.z]} scale={p.s}>
@@ -266,11 +275,11 @@ function Tree({ p }: { p: Placed }) {
         </mesh>
         <mesh position={[0, 1.8, 0]} castShadow>
           <coneGeometry args={[1.0, 2.4, 7]} />
-          <meshStandardMaterial color="#3f7f3c" roughness={0.9} />
+          <meshStandardMaterial color={underSnow("#3f7f3c", snowy, 0.6)} roughness={0.9} />
         </mesh>
         <mesh position={[0, 2.9, 0]} castShadow>
           <coneGeometry args={[0.72, 1.6, 7]} />
-          <meshStandardMaterial color="#4d9247" roughness={0.9} />
+          <meshStandardMaterial color={underSnow("#4d9247", snowy, 0.62)} roughness={0.9} />
         </mesh>
       </group>
     );
@@ -284,7 +293,7 @@ function Tree({ p }: { p: Placed }) {
         </mesh>
         <mesh position={[0, 2.3, 0]} castShadow>
           <sphereGeometry args={[1.25, 8, 7]} />
-          <meshStandardMaterial color="#5aa04a" roughness={0.9} />
+          <meshStandardMaterial color={underSnow("#5aa04a", snowy, 0.6)} roughness={0.9} />
         </mesh>
         <mesh position={[0.5, 1.8, 0.35]} castShadow>
           <sphereGeometry args={[0.8, 7, 6]} />
@@ -433,7 +442,13 @@ function Lake() {
  * roughly a thousand pieces — and it's the closest thing to the window, so it's
  * what actually gives the cab view its sense of speed.
  */
-function Fences({ samples }: { samples: { x: number; y: number; z: number }[] }) {
+function Fences({
+  samples,
+  snowy,
+}: {
+  samples: { x: number; y: number; z: number }[];
+  snowy: boolean;
+}) {
   const SPACING = 2.7;
   const OFFSET = 6.6;
   const count = Math.floor(ROUTE_LENGTH / SPACING) * 2;
@@ -485,7 +500,9 @@ function Fences({ samples }: { samples: { x: number; y: number; z: number }[] })
     }
   }, [samples, count]);
 
-  const timber = <meshStandardMaterial color="#6b5334" roughness={0.95} />;
+  const timber = (
+    <meshStandardMaterial color={underSnow("#6b5334", snowy, 0.45)} roughness={0.95} />
+  );
   return (
     <group>
       <instancedMesh ref={posts} args={[undefined, undefined, count]} castShadow>
@@ -762,10 +779,10 @@ function Scenery({ mood }: { mood: Mood }) {
       </mesh>
 
       {trees.map((t, i) => (
-        <Tree key={i} p={t} />
+        <Tree key={i} p={t} snowy={mood.snowy} />
       ))}
       <TelegraphPoles />
-      <Fences samples={samples} />
+      <Fences samples={samples} snowy={mood.snowy} />
       <Sheep samples={samples} />
       <Birds />
       <Tunnel />
@@ -779,11 +796,11 @@ function Scenery({ mood }: { mood: Mood }) {
         </mesh>
         <mesh position={[0, 2.0, 0.9]} castShadow>
           <boxGeometry args={[7, 3.3, 3.6]} />
-          <meshStandardMaterial color="#f2d9b6" roughness={0.8} />
+          <meshStandardMaterial color={underSnow("#f2d9b6", mood.snowy, 0.3)} roughness={0.8} />
         </mesh>
         <mesh position={[0, 4.1, 0.9]} rotation={[0, Math.PI / 4, 0]} castShadow>
           <coneGeometry args={[4.4, 1.8, 4]} />
-          <meshStandardMaterial map={tiled("roof.jpg", 3, 2)} roughness={0.75} />
+          <meshStandardMaterial map={tiled("roof.jpg", 3, 2)} color={underSnow("#ffffff", mood.snowy, 0.75)} roughness={0.75} />
         </mesh>
         {[-2.1, 2.1].map((x) => (
           <mesh key={x} position={[x, 1.9, -0.92]}>

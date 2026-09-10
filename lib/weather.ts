@@ -118,7 +118,7 @@ const TIMES: Record<TimeKey, Mood> = {
 };
 
 /** Mixes two hex colours; t = 0 keeps `a`. */
-function mix(a: string, b: string, t: number) {
+export function mixColour(a: string, b: string, t: number) {
   const pa = parseInt(a.slice(1), 16);
   const pb = parseInt(b.slice(1), 16);
   const out = [16, 8, 0].map((shift) => {
@@ -142,19 +142,19 @@ export function moodFor(time: TimeKey, sky: SkyKey): Mood {
     const grey = "#6c7a86";
     return {
       ...base,
-      sunColour: mix(base.sunColour, grey, 0.55),
+      sunColour: mixColour(base.sunColour, grey, 0.55),
       sunIntensity: base.sunIntensity * 0.62,
-      hemiSky: mix(base.hemiSky, grey, 0.6),
-      hemiGround: mix(base.hemiGround, "#3b4640", 0.5),
+      hemiSky: mixColour(base.hemiSky, grey, 0.6),
+      hemiGround: mixColour(base.hemiGround, "#3b4640", 0.5),
       hemiIntensity: base.hemiIntensity * 1.15,
-      skyTop: mix(base.skyTop, "#4b5762", 0.7),
-      skyHorizon: mix(base.skyHorizon, "#8894a0", 0.7),
-      fogColour: mix(base.fogColour, "#7b8894", 0.7),
+      skyTop: mixColour(base.skyTop, "#4b5762", 0.7),
+      skyHorizon: mixColour(base.skyHorizon, "#8894a0", 0.7),
+      fogColour: mixColour(base.fogColour, "#7b8894", 0.7),
       // you cannot see far in rain, and that is most of the effect
       fogNear: base.fogNear * 0.4,
       fogFar: base.fogFar * 0.45,
-      groundTint: mix(base.groundTint, "#93a3ad", 0.45),
-      cloudTint: mix(base.cloudTint, "#555f6b", 0.75),
+      groundTint: mixColour(base.groundTint, "#93a3ad", 0.45),
+      cloudTint: mixColour(base.cloudTint, "#555f6b", 0.75),
       cloudOpacity: 0.95,
       stars: 0,
       showSun: false,
@@ -166,20 +166,20 @@ export function moodFor(time: TimeKey, sky: SkyKey): Mood {
   const pale = "#dce8f2";
   return {
     ...base,
-    sunColour: mix(base.sunColour, pale, 0.5),
+    sunColour: mixColour(base.sunColour, pale, 0.5),
     sunIntensity: base.sunIntensity * 0.72,
-    hemiSky: mix(base.hemiSky, pale, 0.6),
-    hemiGround: mix(base.hemiGround, "#c9d6e0", 0.75),
+    hemiSky: mixColour(base.hemiSky, pale, 0.6),
+    hemiGround: mixColour(base.hemiGround, "#c9d6e0", 0.75),
     hemiIntensity: base.hemiIntensity * 1.15,
-    skyTop: mix(base.skyTop, "#9fb0bf", 0.7),
-    skyHorizon: mix(base.skyHorizon, "#dfe8ef", 0.75),
-    fogColour: mix(base.fogColour, "#cdd9e3", 0.75),
+    skyTop: mixColour(base.skyTop, "#9fb0bf", 0.7),
+    skyHorizon: mixColour(base.skyHorizon, "#dfe8ef", 0.75),
+    fogColour: mixColour(base.fogColour, "#cdd9e3", 0.75),
     fogNear: base.fogNear * 0.5,
     fogFar: base.fogFar * 0.55,
     // washes the field patchwork out — snow-dusted rather than buried, since
     // the grass texture is still underneath
-    groundTint: mix(base.groundTint, "#e9f2f8", 0.85),
-    cloudTint: mix(base.cloudTint, "#c3ced8", 0.7),
+    groundTint: mixColour(base.groundTint, "#e9f2f8", 0.85),
+    cloudTint: mixColour(base.cloudTint, "#c3ced8", 0.7),
     cloudOpacity: 0.95,
     stars: base.stars * 0.3,
     showSun: false,
