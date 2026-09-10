@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import Track3D, { type CameraMode } from "@/components/Track3D";
+import Track3D, {
+  DEFAULT_FREE_LOOK,
+  type CameraMode,
+  type FreeLook,
+} from "@/components/Track3D";
 import CabOverlay from "@/components/CabOverlay";
 import { playWhistle, primeAudio } from "@/lib/sound";
 import { INITIAL_CONTROLS, type Controls } from "@/lib/driving";
@@ -30,6 +34,7 @@ const CAMERAS: { mode: CameraMode; label: string; icon: string }[] = [
   { mode: "chase", label: "跟著跑", icon: "🎥" },
   { mode: "cab", label: "駕駛座", icon: "👀" },
   { mode: "sky", label: "從天上看", icon: "🦅" },
+  { mode: "free", label: "自由轉", icon: "🔄" },
 ];
 
 /** How fast the simple buttons wind the regulator open and shut. */
@@ -38,6 +43,9 @@ const REGULATOR_RATE = 1.6;
 export default function TrackPage() {
   const [config, setConfig] = useState<TrainConfig>(DEFAULT_CONFIG);
   const [cameraMode, setCameraMode] = useState<CameraMode>("chase");
+  // a ref, not state: the camera is driven every frame, and re-rendering the
+  // page on every pixel of drag would be wasted work
+  const freeLook = useRef<FreeLook>({ ...DEFAULT_FREE_LOOK });
   // starts on the default and picks up the saved choice after mount, so the
   // server-rendered markup and the first client render agree
   const [weather, setWeather] = useState<WeatherChoice>(DEFAULT_WEATHER);
@@ -161,10 +169,59 @@ export default function TrackPage() {
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
 
+  /* ---- dragging the free camera ---------------------------------------- */
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef(0);
+
+  const beginLook = (e: React.PointerEvent) => {
+    touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    pinch.current = 0;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+  };
+
+  const moveLook = (e: React.PointerEvent) => {
+    const prev = touches.current.get(e.pointerId);
+    if (!prev) return;
+    touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const look = freeLook.current;
+
+    if (touches.current.size >= 2) {
+      // two fingers: the gap between them sets how far back the camera sits
+      const [a, b] = [...touches.current.values()];
+      const gap = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinch.current) {
+        look.distance = Math.min(34, Math.max(4.5, look.distance * (pinch.current / gap)));
+      }
+      pinch.current = gap;
+      return;
+    }
+
+    look.yaw -= (e.clientX - prev.x) * 0.008;
+    // stop short of straight up and straight down, where the view flips over
+    look.pitch = Math.min(1.35, Math.max(-0.25, look.pitch + (e.clientY - prev.y) * 0.006));
+  };
+
+  const endLook = (e: React.PointerEvent) => {
+    touches.current.delete(e.pointerId);
+    if (touches.current.size < 2) pinch.current = 0;
+  };
+
   const inCab = cameraMode === "cab";
 
   return (
     <div className="no-touch-scroll fixed inset-0 bg-[#0b100e]">
+      {cameraMode === "free" && (
+        <div
+          className="absolute inset-0 z-[5]"
+          style={{ touchAction: "none" }}
+          onPointerDown={beginLook}
+          onPointerMove={moveLook}
+          onPointerUp={endLook}
+          onPointerCancel={endLook}
+          onContextMenu={(e) => e.preventDefault()}
+        />
+      )}
+
       <div className="absolute inset-0">
         <Track3D
           config={config}
@@ -174,6 +231,7 @@ export default function TrackPage() {
           onWhistle={honk}
           weather={weather}
           route={route}
+          freeLook={freeLook}
         />
       </div>
 

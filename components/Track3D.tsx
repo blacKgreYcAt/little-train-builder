@@ -1148,7 +1148,24 @@ function Steam({ emitter }: { emitter: React.RefObject<Puff[]> }) {
 
 /* ---------------------------------------------------------- the driving --- */
 
-export type CameraMode = "chase" | "cab" | "sky";
+export type CameraMode = "chase" | "cab" | "sky" | "free";
+
+/**
+ * Where the free camera is looking from, in the engine's own frame: an angle
+ * round it, an angle above it, and how far back.
+ *
+ * This is deliberately not drei's OrbitControls. Those orbit a fixed target,
+ * and the target here is a train doing 20 units a second — the damping fights
+ * the motion and the view slides about. Holding the angle and letting the
+ * engine move underneath is what makes it feel attached.
+ */
+export interface FreeLook {
+  yaw: number;
+  pitch: number;
+  distance: number;
+}
+
+export const DEFAULT_FREE_LOOK: FreeLook = { yaw: Math.PI, pitch: 0.32, distance: 11 };
 
 /**
  * Driver's eye on the footplate, in the engine's own coordinates. Sits where
@@ -1164,6 +1181,7 @@ function Driver({
   distance,
   tunnelFactor,
   cameraMode,
+  freeLook,
   onWhistle,
 }: {
   config: TrainConfig;
@@ -1173,6 +1191,7 @@ function Driver({
   /** 0 in daylight, 1 deep inside the hill — dims the world, lights the fire. */
   tunnelFactor: React.RefObject<number>;
   cameraMode: CameraMode;
+  freeLook: React.RefObject<FreeLook>;
   onWhistle: () => void;
 }) {
   const fireLight = useRef<THREE.PointLight>(null);
@@ -1239,6 +1258,24 @@ function Driver({
       desired.set(pos.x - tan.x * back, pos.y + up, pos.z - tan.z * back);
       camera.position.lerp(desired, 1 - Math.pow(0.0016, dt));
       lookTarget.set(pos.x + tan.x * 4, pos.y + 1.4, pos.z + tan.z * 4);
+    } else if (cameraMode === "free") {
+      // yaw is measured from the engine's own heading, so "behind the train"
+      // stays behind the train through every curve
+      const look = freeLook.current ?? DEFAULT_FREE_LOOK;
+      const heading = Math.atan2(tan.x, tan.z);
+      const a = heading + look.yaw;
+      const flat = Math.cos(look.pitch) * look.distance;
+      desired.set(
+        pos.x + Math.sin(a) * flat,
+        pos.y + 1.2 + Math.sin(look.pitch) * look.distance,
+        pos.z + Math.cos(a) * flat
+      );
+      // snappier than the chase camera: a dragged camera has to answer at once
+      camera.position.lerp(desired, 1 - Math.pow(0.0000001, dt));
+      lookTarget.set(pos.x, pos.y + 1.3, pos.z);
+      smoothLook.current.copy(lookTarget);
+      camera.lookAt(smoothLook.current);
+      return;
     } else if (cameraMode === "cab") {
       // Standing on the footplate: the camera is rigidly fixed in the cab, so
       // the backhead and levers stay put on screen while the world goes by.
@@ -1286,6 +1323,7 @@ export default function Track3D({
   controlsRef,
   speedRef,
   cameraMode,
+  freeLook,
   onWhistle,
   weather,
   route,
@@ -1294,6 +1332,7 @@ export default function Track3D({
   controlsRef: React.RefObject<Controls>;
   speedRef: React.RefObject<number>;
   cameraMode: CameraMode;
+  freeLook: React.RefObject<FreeLook>;
   onWhistle: () => void;
   weather: WeatherChoice;
   route: RouteKey;
@@ -1343,6 +1382,7 @@ export default function Track3D({
         distance={distance}
         tunnelFactor={tunnelFactor}
         cameraMode={cameraMode}
+        freeLook={freeLook}
         onWhistle={onWhistle}
       />
     </Canvas>
