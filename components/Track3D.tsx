@@ -36,6 +36,7 @@ import type { TrainConfig } from "@/lib/parts";
 import { mixColour, moodFor, type Mood, type SkyKey, type WeatherChoice } from "@/lib/weather";
 import { applyRoute } from "@/lib/world";
 import type { RouteKey } from "@/lib/routes";
+import { STOP_FRACTIONS, ZONE, offsetFromStop, stopDistances } from "@/lib/stops";
 
 /* ------------------------------------------------------------ track bed --- */
 
@@ -1177,6 +1178,69 @@ function Steam({ emitter }: { emitter: React.RefObject<Puff[]> }) {
   );
 }
 
+/**
+ * Where the engine has to pull up. A striped post either end of the box and a
+ * mat between them, so a child who cannot read still knows exactly where to
+ * aim — and the mat turns green the moment the engine is inside it.
+ */
+function StopMarkers({ distanceRef }: { distanceRef: React.RefObject<number> }) {
+  const mats = useRef<(THREE.Mesh | null)[]>([]);
+
+  const places = useMemo(() => {
+    const p = new THREE.Vector3();
+    const tan = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    return stopDistances(ROUTE_LENGTH).map((at) => {
+      sampleRoute(at, p, tan);
+      orientationFromTangent(tan, q);
+      return { at, pos: p.clone(), quat: q.clone() };
+    });
+  }, []);
+
+  useFrame(() => {
+    const d = distanceRef.current ?? 0;
+    places.forEach((place, i) => {
+      const mat = mats.current[i];
+      if (!mat) return;
+      const inside = Math.abs(offsetFromStop(d, place.at, ROUTE_LENGTH)) <= ZONE;
+      const m = mat.material as THREE.MeshStandardMaterial;
+      m.color.set(inside ? "#39d353" : "#e8c93a");
+      m.opacity = inside ? 0.85 : 0.5;
+    });
+  });
+
+  return (
+    <group>
+      {places.map((place, i) => (
+        <group key={i} position={place.pos} quaternion={place.quat}>
+          {/* the box painted on the ballast */}
+          <mesh
+            ref={(el) => { mats.current[i] = el; }}
+            position={[0, 0.09, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <planeGeometry args={[ZONE * 2, 3.4]} />
+            <meshStandardMaterial color="#e8c93a" transparent opacity={0.5} roughness={0.9} />
+          </mesh>
+          {/* a post at each end of the box, and a target board on the near one */}
+          {[-ZONE, ZONE].map((x) => (
+            <group key={x} position={[x, 0, 2.6]}>
+              <mesh position={[0, 1.1, 0]} castShadow>
+                <cylinderGeometry args={[0.09, 0.09, 2.2, 6]} />
+                <meshStandardMaterial color="#f4f1e8" roughness={0.85} />
+              </mesh>
+              <mesh position={[0, 2.35, 0]} castShadow>
+                <boxGeometry args={[0.9, 0.62, 0.09]} />
+                <meshStandardMaterial color="#e63b2e" roughness={0.7} />
+              </mesh>
+            </group>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
+}
+
 /* ---------------------------------------------------------- the driving --- */
 
 export type CameraMode = "chase" | "cab" | "sky" | "free";
@@ -1353,6 +1417,7 @@ export default function Track3D({
   config,
   controlsRef,
   speedRef,
+  distanceRef,
   cameraMode,
   freeLook,
   onWhistle,
@@ -1362,6 +1427,7 @@ export default function Track3D({
   config: TrainConfig;
   controlsRef: React.RefObject<Controls>;
   speedRef: React.RefObject<number>;
+  distanceRef?: React.RefObject<number>;
   cameraMode: CameraMode;
   freeLook: React.RefObject<FreeLook>;
   onWhistle: () => void;
@@ -1374,8 +1440,9 @@ export default function Track3D({
   useMemo(() => applyRoute(route), [route]);
   const [canvasKey, setCanvasKey] = useState(0);
   /** How far the engine has travelled — shared so the lighting knows when it
-      is inside the hill. */
-  const distance = useRef(0);
+      is inside the hill, and so the page can judge the station stops. */
+  const ownDistance = useRef(0);
+  const distance = distanceRef ?? ownDistance;
   const tunnelFactor = useRef(0);
 
   useEffect(() => {
@@ -1406,6 +1473,7 @@ export default function Track3D({
       <Scenery mood={mood} />
       <Track />
       <Signals distanceRef={distance} />
+      <StopMarkers distanceRef={distance} />
       <Driver
         config={config}
         controlsRef={controlsRef}

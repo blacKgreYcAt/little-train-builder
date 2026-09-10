@@ -29,6 +29,16 @@ import {
   loadRoute,
   type RouteKey,
 } from "@/lib/routes";
+import {
+  STOPPED_SPEED,
+  ZONE,
+  nearestStop,
+  nextStop,
+  starsFor,
+  type StopVerdict,
+} from "@/lib/stops";
+// a live binding: it changes with the chosen route, so read it each frame
+import { ROUTE_LENGTH } from "@/lib/route";
 
 const CAMERAS: { mode: CameraMode; label: string; icon: string }[] = [
   { mode: "chase", label: "跟著跑", icon: "🎥" },
@@ -85,6 +95,17 @@ export default function TrackPage() {
 
   const controlsRef = useRef<Controls>({ ...INITIAL_CONTROLS });
   const speedRef = useRef(0);
+  const distanceRef = useRef(0);
+
+  /* ---- the stopping game ----------------------------------------------- */
+  // How close the next platform is, for the approach bar. Held as state
+  // because it drives the HUD, but only written when it changes enough to see.
+  const [gap, setGap] = useState<number | null>(null);
+  const [result, setResult] = useState<{ stars: StopVerdict; id: number } | null>(null);
+  const [stars, setStars] = useState(0);
+  // which platform we are working on, and whether it has already been judged
+  const judged = useRef<number | null>(null);
+  const resultId = useRef(0);
   /** What the child is holding down right now. */
   const held = useRef({ throttle: false, brake: false });
   const [reverser, setReverser] = useState<1 | -1>(1);
@@ -206,6 +227,53 @@ export default function TrackPage() {
     if (touches.current.size < 2) pinch.current = 0;
   };
 
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const d = distanceRef.current;
+      const speed = Math.abs(speedRef.current);
+      const routeLength = ROUTE_LENGTH;
+      if (!routeLength) return;
+
+      // the bar counts down to the platform ahead...
+      const ahead = nextStop(d, routeLength);
+      setGap(ahead.gap < 90 ? ahead.gap : null);
+
+      // ...but judging follows the *nearest* platform, so it doesn't change
+      // out from under us the moment the engine noses past the box
+      const near = nearestStop(d, routeLength);
+      const offset = near.offset;
+
+      if (Math.abs(offset) <= ZONE) {
+        if (speed < STOPPED_SPEED && judged.current !== near.index) {
+          judged.current = near.index;
+          resultId.current += 1;
+          setResult({ stars: starsFor(offset), id: resultId.current });
+          setStars((n) => n + starsFor(offset));
+          playWhistle(config.whistle);
+        }
+      } else if (offset > ZONE && offset < ZONE + 14) {
+        // sailed straight through without stopping — that is the miss, and
+        // it has to be shown or there is nothing to get better at
+        if (judged.current !== near.index) {
+          judged.current = near.index;
+          resultId.current += 1;
+          setResult({ stars: 0, id: resultId.current });
+        }
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [config.whistle]);
+
+  // the result banner clears itself
+  useEffect(() => {
+    if (!result) return;
+    const t = setTimeout(() => setResult(null), 2600);
+    return () => clearTimeout(t);
+  }, [result]);
+
   const inCab = cameraMode === "cab";
 
   return (
@@ -232,6 +300,7 @@ export default function TrackPage() {
           weather={weather}
           route={route}
           freeLook={freeLook}
+          distanceRef={distanceRef}
         />
       </div>
 
@@ -336,6 +405,44 @@ export default function TrackPage() {
               >
                 ✓
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- the stopping game, told entirely in pictures ---- */}
+      {stars > 0 && (
+        <div className="safe-top safe-x pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 p-3">
+          <div className="rounded-full border border-white/20 bg-black/30 px-3 py-1 text-lg backdrop-blur-sm">
+            ⭐ {stars}
+          </div>
+        </div>
+      )}
+
+      {gap !== null && !result && (
+        <div className="safe-x pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center pb-2">
+          <div className="flex w-44 flex-col items-center gap-1 rounded-xl border border-white/20 bg-black/30 px-3 py-2 backdrop-blur-sm">
+            <div className="text-xl">🚏</div>
+            {/* the bar fills as the platform gets closer, so "nearly there" is
+                something you can see rather than a number to read */}
+            <div className="h-2 w-full overflow-hidden rounded-full bg-white/20">
+              <i
+                className="block h-full rounded-full bg-[#39d353] transition-[width] duration-150"
+                style={{ width: `${Math.max(0, Math.min(100, (1 - gap / 90) * 100))}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {result && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
+          <div
+            key={result.id}
+            className="rounded-2xl border border-white/25 bg-black/45 px-8 py-5 text-center backdrop-blur-md"
+          >
+            <div className="text-5xl">
+              {result.stars > 0 ? "⭐".repeat(result.stars) : "😅"}
             </div>
           </div>
         </div>
